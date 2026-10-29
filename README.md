@@ -1,6 +1,8 @@
 # prompt-diff
 
 [![CI](https://github.com/webywz/prompt-diff/actions/workflows/ci.yml/badge.svg)](https://github.com/webywz/prompt-diff/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@webywz/prompt-diff.svg)](https://www.npmjs.com/package/@webywz/prompt-diff)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Diff two LLM prompts like code.
 
@@ -19,7 +21,7 @@ npm i -g @webywz/prompt-diff
 npx @webywz/prompt-diff old.txt new.txt
 ```
 
-Requires Node.js 18+.
+Requires Node.js 18+. 已发布到 npm，全局安装或一次性 `npx` 均可。
 
 ## Usage
 
@@ -46,6 +48,13 @@ prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk is high
 | `--no-color` | Disable ANSI colors. |
 
 Exit codes: `0` ok · `1` `--fail-above` exceeded · `2` usage / I/O error.
+
+### GitHub Actions
+
+```yaml
+- name: Prompt regression
+  run: npx @webywz/prompt-diff --fail-above 45 old.txt new.txt
+```
 
 ## Example
 
