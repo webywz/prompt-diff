@@ -30,5 +30,6 @@ jobs:
           test -x dist/cli.js
           head -n 1 dist/cli.js | grep -q '^#!/usr/bin/env node$'
           tarball=$(npm pack --silent)
-          tar -tzf "$tarball" | grep -q 'package/dist/cli.js'
+          contents=$(tar -tzf "$tarball")
+          printf '%s\n' "$contents" | grep -Fxq 'package/dist/cli.js'
           rm -f "$tarball"
