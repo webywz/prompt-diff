@@ -1,0 +1,63 @@
+{
+  "name": "@webywz/prompt-diff",
+  "version": "0.1.0",
+  "description": "Diff two LLM prompts like code: intent, tokens, and regression risk.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "prompt-diff": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/chmod-cli.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "prompt-diff": "tsx src/cli.ts",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "prompt",
+    "diff",
+    "llm",
+    "openai",
+    "anthropic",
+    "cli",
+    "tokens",
+    "system-prompt"
+  ],
+  "author": "webywz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webywz/prompt-diff.git"
+  },
+  "bugs": {
+    "url": "https://github.com/webywz/prompt-diff/issues"
+  },
+  "homepage": "https://github.com/webywz/prompt-diff#readme",
+  "dependencies": {
+    "diff": "^8.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
