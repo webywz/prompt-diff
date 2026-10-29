@@ -52,7 +52,7 @@ Exit codes: `0` ok · `1` `--fail-above` exceeded · `2` usage / I/O error.
 Two bundled prompts live in [`prompts/v1.txt`](prompts/v1.txt) and [`prompts/v2.txt`](prompts/v2.txt). v2 looks like a harmless rewrite. prompt-diff disagrees:
 
 ```text
-prompt-diff  v0.1.0
+prompt-diff  v0.1.1
 
   old  prompts/v1.txt   480 chars   78 words   15 lines   112 tok
   new  prompts/v2.txt   641 chars   85 words   22 lines   137 tok
@@ -156,7 +156,7 @@ prompt-diff --json prompts/v1.txt prompts/v2.txt
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identical": false,
   "files": { "old": "prompts/v1.txt", "new": "prompts/v2.txt" },
   "stats": {
