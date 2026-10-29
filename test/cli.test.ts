@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -27,6 +29,39 @@ function run(
 }
 
 describe("prompt-diff CLI", () => {
+  it("keeps a node shebang on the CLI entry", () => {
+    const source = readFileSync(cli, "utf8");
+    assert.equal(source.split(/\r?\n/, 1)[0], "#!/usr/bin/env node");
+  });
+
+  it("restores a missing shebang after tsc emit", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-diff-cli-"));
+    const compiled = join(dir, "cli.js");
+    try {
+      writeFileSync(compiled, 'console.log("ok");\n');
+      const result = spawnSync(process.execPath, [join(root, "scripts/chmod-cli.js"), compiled], {
+        cwd: root,
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const out = readFileSync(compiled, "utf8");
+      assert.equal(out, '#!/usr/bin/env node\nconsole.log("ok");\n');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("prints the package version", () => {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      version: string;
+      bin: Record<string, string>;
+    };
+    assert.equal(pkg.bin["prompt-diff"], "dist/cli.js");
+    const result = run(["--version"]);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, `${pkg.version}\n`);
+  });
+
   it("prints help", () => {
     const result = run(["--help"]);
     assert.equal(result.status, 0);

@@ -29,7 +29,12 @@ jobs:
           set -euo pipefail
           test -x dist/cli.js
           head -n 1 dist/cli.js | grep -q '^#!/usr/bin/env node$'
+          expected=$(node -p 'JSON.parse(require("fs").readFileSync("package.json","utf8")).version')
+          node dist/cli.js --version | grep -Fxq "$expected"
+          node -e 'const p=JSON.parse(require("fs").readFileSync("package.json","utf8")); if (p.bin["prompt-diff"] !== "dist/cli.js") process.exit(1)'
           tarball=$(npm pack --silent)
-          contents=$(tar -tzf "$tarball")
-          printf '%s\n' "$contents" | grep -Fxq 'package/dist/cli.js'
-          rm -f "$tarball"
+          unpack=$(mktemp -d)
+          tar -xzf "$tarball" -C "$unpack"
+          test -f "$unpack/package/dist/cli.js"
+          head -n 1 "$unpack/package/dist/cli.js" | grep -q '^#!/usr/bin/env node$'
+          rm -rf "$unpack" "$tarball"
