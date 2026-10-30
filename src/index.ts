@@ -2,6 +2,8 @@ export { analyzeStructure, measure } from "./analyze.js";
 export { detectAiProvider, semanticRiskParagraph } from "./ai.js";
 export { diffPrompts } from "./diffPrompts.js";
 export { formatHuman, formatJson } from "./format.js";
+export { escapeHtml, formatHtml, formatSuiteHtml } from "./html.js";
+export type { HtmlFormatOptions, SuiteHtmlFormatOptions } from "./html.js";
 export {
   annotation,
   appendGitHubJobOutput,
@@ -26,4 +28,5 @@ export type {
   RiskResult,
   StatsDelta,
   StructureProfile,
+  SuiteReport,
 } from "./types.js";

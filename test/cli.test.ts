@@ -265,7 +265,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.8");
+    assert.equal(pkg.version, "0.1.9");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
@@ -470,6 +470,125 @@ describe("prompt-diff CLI", () => {
         const result = run(["--suite", invalidFile, "--json"]);
         assert.equal(result.status, 2);
         assert.match(result.stderr, /suite file must be \.json, \.yml, or \.yaml/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("--html report", () => {
+    const CDN = /cdn\.|unpkg|jsdelivr|fonts\.googleapis/i;
+
+    it("documents --html [path] in help", () => {
+      const result = run(["--help"]);
+      assert.equal(result.status, 0);
+      assert.match(result.stdout, /--html \[path\]/);
+      assert.match(result.stdout, /Self-contained HTML report/);
+      assert.match(result.stdout, /--html and --json cannot share stdout/);
+    });
+
+    it("prints HTML to stdout when path is omitted", () => {
+      const result = run(["prompts/v1.txt", "prompts/v2.txt", "--html"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.match(result.stdout, /prompt-diff/);
+      assert.match(result.stdout, /Risk score/);
+      assert.match(result.stdout, /\d+\/100/);
+      assert.doesNotMatch(result.stdout, CDN);
+      assert.doesNotMatch(result.stdout, /<script[\s>]/i);
+      assert.doesNotMatch(result.stdout, /::group::/);
+    });
+
+    it("writes HTML to path and does not dump it to stdout", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-html-"));
+      const outFile = join(dir, "nested", "report.html");
+      try {
+        const result = run(["prompts/v1.txt", "prompts/v2.txt", "--html", outFile]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stderr, /wrote html report to/);
+        assert.match(result.stderr, new RegExp(outFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+        const content = readFileSync(outFile, "utf8");
+        assert.match(content, /<!DOCTYPE html>/i);
+        assert.match(content, /Risk score/);
+        assert.match(content, /prompt-diff/);
+        assert.doesNotMatch(content, CDN);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects --html together with --json", () => {
+      const result = run(["--html", "--json", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /cannot be combined with --json/);
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("keeps default pretty stdout when --html is absent", () => {
+      const result = run(["prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Risk/);
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("keeps --json stdout unchanged when --html is absent", () => {
+      const result = run(["--json", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      const payload = JSON.parse(result.stdout) as JsonPayload;
+      assert.equal(typeof payload.risk.score, "number");
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("keeps HTML on stdout with --html --quiet", () => {
+      const result = run(["--quiet", "prompts/v1.txt", "prompts/v2.txt", "--html"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.doesNotMatch(result.stderr, /Risk/);
+    });
+
+    it("keeps --github annotations on stderr when --html is on stdout", () => {
+      const result = run(["--github", "prompts/v1.txt", "prompts/v2.txt", "--html"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.doesNotMatch(result.stdout, /::(error|warning|notice) /);
+      assert.match(result.stderr, /::(error|warning|notice) /);
+      assert.doesNotMatch(result.stdout, /::group::/);
+    });
+
+    it("writes pretty to --out and HTML to stdout", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-html-out-"));
+      const outFile = join(dir, "report.txt");
+      try {
+        const result = run(["--html", "--out", outFile, "prompts/v1.txt", "prompts/v2.txt"]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stdout, /<!DOCTYPE html>/i);
+        const written = readFileSync(outFile, "utf8");
+        assert.match(written, /Risk/);
+        assert.doesNotMatch(written, /<!DOCTYPE html>/i);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("renders suite HTML on stdout", () => {
+      const result = run(["--suite", "examples/suite.json", "--html"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.match(result.stdout, /Suite/);
+      assert.match(result.stdout, /v1-to-v2/);
+      assert.doesNotMatch(result.stdout, CDN);
+    });
+
+    it("suppresses wrote-html notice with --html path --quiet", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-html-quiet-"));
+      const htmlFile = join(dir, "report.html");
+      try {
+        const result = run(["--quiet", "--html", htmlFile, "prompts/v1.txt", "prompts/v2.txt"]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.doesNotMatch(result.stderr, /wrote html/);
+        assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+        assert.match(readFileSync(htmlFile, "utf8"), /prompt-diff/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
