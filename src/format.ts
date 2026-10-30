@@ -1,6 +1,7 @@
 import { buildSplitRows } from "./patch.js";
 import { packageVersion } from "./version.js";
-import type { JsonPayload, PromptDiffResult, RiskLevel } from "./types.js";
+import type { JsonPayload, PromptDiffResult, RiskLevel, Locale } from "./types.js";
+import { getLocaleStrings } from "./locale.js";
 
 const ANSI = {
   reset: "\x1b[0m",
@@ -21,6 +22,7 @@ export interface FormatOptions {
   newLabel: string;
   columns?: number;
   semanticRisk?: string;
+  locale?: Locale;
 }
 
 function paint(color: boolean, code: string, text: string): string {
@@ -53,8 +55,9 @@ function meter(score: number, color: boolean): string {
   return paint(color, ANSI.dim, bar);
 }
 
-function formatUnified(unified: string, color: boolean): string {
-  if (!unified.trim()) return paint(color, ANSI.dim, "  (no textual diff)");
+function formatUnified(unified: string, color: boolean, locale: Locale = "en"): string {
+  const strings = getLocaleStrings(locale);
+  if (!unified.trim()) return paint(color, ANSI.dim, `  (${strings.noDiff})`);
   return unified
     .split("\n")
     .map((line) => {
@@ -108,30 +111,32 @@ export function formatHuman(
   options: FormatOptions,
 ): string {
   const c = options.color;
+  const locale = options.locale ?? "en";
+  const strings = getLocaleStrings(locale);
   const { stats, risk, summary } = result;
   const out: string[] = [];
 
-  out.push(paint(c, ANSI.bold, `prompt-diff  v${packageVersion()}`));
+  out.push(paint(c, ANSI.bold, `${strings.version}${packageVersion()}`));
   out.push("");
 
-  const token = (n: number): string => (options.tokens ? `   ${n} tok` : "");
+  const token = (n: number): string => (options.tokens ? `   ${n} ${strings.tok}` : "");
   out.push(
-    `  ${paint(c, ANSI.dim, "old")}  ${options.oldLabel}   ${stats.old.chars} chars   ${stats.old.words} words   ${stats.old.lines} lines${token(stats.old.tokens)}`,
+    `  ${paint(c, ANSI.dim, strings.old)}  ${options.oldLabel}   ${stats.old.chars} ${strings.chars}   ${stats.old.words} ${strings.words}   ${stats.old.lines} ${strings.lines}${token(stats.old.tokens)}`,
   );
   out.push(
-    `  ${paint(c, ANSI.dim, "new")}  ${options.newLabel}   ${stats.new.chars} chars   ${stats.new.words} words   ${stats.new.lines} lines${token(stats.new.tokens)}`,
+    `  ${paint(c, ANSI.dim, strings.new)}  ${options.newLabel}   ${stats.new.chars} ${strings.chars}   ${stats.new.words} ${strings.words}   ${stats.new.lines} ${strings.lines}${token(stats.new.tokens)}`,
   );
   const pct = `${stats.delta.percent >= 0 ? "+" : ""}${stats.delta.percent.toFixed(1)}%`;
-  const tokenDelta = options.tokens ? `  ${sign(stats.delta.tokens)} tok` : "";
+  const tokenDelta = options.tokens ? `  ${sign(stats.delta.tokens)} ${strings.tok}` : "";
   out.push(
-    `  ${paint(c, ANSI.dim, "Δ")}    ${sign(stats.delta.chars)} chars (${pct})  ${sign(stats.delta.words)} words  ${sign(stats.delta.lines)} lines${tokenDelta}`,
+    `  ${paint(c, ANSI.dim, strings.delta)}    ${sign(stats.delta.chars)} ${strings.chars} (${pct})  ${sign(stats.delta.words)} ${strings.words}  ${sign(stats.delta.lines)} ${strings.lines}${tokenDelta}`,
   );
   out.push("");
 
   const level = paint(c, levelColor(risk.level), risk.level);
-  out.push(`  ${paint(c, ANSI.bold, "Risk")}  ${meter(risk.score, c)}  ${paint(c, ANSI.bold, String(risk.score))}/100  ${level}`);
+  out.push(`  ${paint(c, ANSI.bold, strings.risk)}  ${meter(risk.score, c)}  ${paint(c, ANSI.bold, String(risk.score))}/100  ${level}`);
   if (risk.factors.length === 0) {
-    out.push(`    ${paint(c, ANSI.dim, result.identical ? "prompts are identical" : "only trivial wording / whitespace")}`);
+    out.push(`    ${paint(c, ANSI.dim, result.identical ? strings.identical : strings.trivialChange)}`);
   } else {
     for (const factor of risk.factors) {
       out.push(`    ${paint(c, ANSI.dim, "•")} ${factor.detail} ${paint(c, ANSI.dim, `(+${factor.impact})`)}`);
@@ -139,20 +144,20 @@ export function formatHuman(
   }
   out.push("");
 
-  out.push(paint(c, ANSI.bold, "  Summary"));
+  out.push(paint(c, ANSI.bold, `  ${strings.summary}`));
   const section = (title: string, color: string, items: string[]): void => {
     out.push(`    ${paint(c, color, title)}`);
     if (items.length === 0) {
-      out.push(`      ${paint(c, ANSI.dim, "—")}`);
+      out.push(`      ${paint(c, ANSI.dim, strings.noneMarker)}`);
       return;
     }
     for (const item of items) out.push(`      • ${item}`);
   };
-  section("Added", ANSI.green, summary.added);
-  section("Removed", ANSI.red, summary.removed);
-  out.push(`    ${paint(c, ANSI.yellow, "Reworded")}`);
+  section(strings.added, ANSI.green, summary.added);
+  section(strings.removed, ANSI.red, summary.removed);
+  out.push(`    ${paint(c, ANSI.yellow, strings.reworded)}`);
   if (summary.reworded.length === 0) {
-    out.push(`      ${paint(c, ANSI.dim, "—")}`);
+    out.push(`      ${paint(c, ANSI.dim, strings.noneMarker)}`);
   } else {
     for (const item of summary.reworded) {
       out.push(`      • ${paint(c, ANSI.red, item.from)}`);
@@ -162,16 +167,16 @@ export function formatHuman(
 
   if (options.semanticRisk) {
     out.push("");
-    out.push(paint(c, ANSI.bold, "  Semantic risk"));
+    out.push(paint(c, ANSI.bold, `  ${strings.semanticRisk}`));
     out.push(`    ${options.semanticRisk}`);
   }
 
   out.push("");
-  out.push(paint(c, ANSI.bold, "  Diff"));
+  out.push(paint(c, ANSI.bold, `  ${strings.diff}`));
   if (options.format === "split") {
     out.push(formatSplit(oldText, newText, c, options.columns ?? 80));
   } else {
-    out.push(formatUnified(result.diff.unified, c));
+    out.push(formatUnified(result.diff.unified, c, locale));
   }
 
   return out.join("\n") + "\n";

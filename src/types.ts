@@ -1,3 +1,5 @@
+export type Locale = "en" | "zh";
+
 export type RiskLevel = "low" | "medium" | "high" | "critical";
 
 export interface PromptStats {

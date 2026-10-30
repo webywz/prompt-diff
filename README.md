@@ -44,6 +44,7 @@ prompt-diff --old a.md --new b.md
 prompt-diff old.txt -                 # new prompt from stdin
 prompt-diff --json old.txt new.txt
 prompt-diff --format split old.txt new.txt
+prompt-diff --locale zh old.txt new.txt        # 中文终端输出
 prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
 prompt-diff --github old.txt new.txt           # CI: PR annotations
 prompt-diff --github --quiet old.txt new.txt   # CI: annotations only (no pretty report)
@@ -61,6 +62,7 @@ prompt-diff --suite examples/suite.json --json --out report.json
 | `--tokens` / `--no-tokens` | Show / hide cl100k-ish token estimates (shown by default) · 显示 / 隐藏 token 估算（默认显示） |
 | `--format unified\|split` | Textual diff layout. Default `unified` · 文本 diff 布局，默认 `unified` |
 | `--context <n>` | Unified-diff context lines. Default `3` · unified 上下文行数 |
+| `--locale <en\|zh>` | Output language for terminal reports (default `en`). Does not affect `--json` keys. · 终端报告语言（默认 `en`），不影响 `--json` 字段名 |
 | `--ai` | Optional one-paragraph semantic risk · 可选一段语义风险说明 |
 | `--fail-above <n>` | Exit `1` when risk score is `>= n` (suite mode: applies to maxScore) · 风险分 `>= n` 时退出码 `1`（批量模式：应用于 maxScore） |
 | `--github` | Emit GitHub Actions `::notice` / `::warning` / `::error` annotations · 输出 Actions 注解，PR Checks 可见 |
