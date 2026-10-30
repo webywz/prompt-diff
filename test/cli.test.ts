@@ -265,9 +265,9 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.4");
+    assert.equal(pkg.version, "0.1.5");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
-    assert.match(example, /@webywz\/prompt-diff@\^0\.1\.4/);
+    assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
     assert.match(example, /findings/);
   });

@@ -69,9 +69,9 @@ Exit codes: `0` ok · `1` `--fail-above` exceeded · `2` usage / I/O error.
 
 退出码：`0` 正常 · `1` 触发 `--fail-above` · `2` 用法或读写错误。
 
-Bundled fixtures: [`prompts/v1.txt`](prompts/v1.txt) · [`prompts/v2.txt`](prompts/v2.txt).
+Bundled fixtures: [`prompts/v1.txt`](prompts/v1.txt) · [`prompts/v2.txt`](prompts/v2.txt) — shipped in the npm package (verify with `npm pack`).
 
-示例文件：`prompts/v1.txt` 与 `prompts/v2.txt`。
+示例文件：`prompts/v1.txt` 与 `prompts/v2.txt`——随 npm 包发布（可用 `npm pack` 验证）。
 
 ```bash
 # GitHub Actions — gate + PR annotations

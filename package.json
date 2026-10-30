@@ -1,6 +1,6 @@
 {
   "name": "@webywz/prompt-diff",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Diff two LLM prompts like code: intent, tokens, and regression risk.",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,6 +17,7 @@
   "files": [
     "dist",
     "examples",
+    "prompts",
     "README.md",
     "LICENSE"
   ],
