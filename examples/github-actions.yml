@@ -26,7 +26,7 @@ jobs:
       - name: Diff prompts (annotations + CI gate)
         id: diff
         run: |
-          npx --yes @webywz/prompt-diff@^0.1.4 \
+          npx --yes @webywz/prompt-diff@^0.1.5 \
             --github \
             --quiet \
             --fail-above 45 \
