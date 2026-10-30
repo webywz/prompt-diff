@@ -265,7 +265,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.7");
+    assert.equal(pkg.version, "0.1.8");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
@@ -327,6 +327,75 @@ describe("prompt-diff CLI", () => {
       assert.ok(payload.summary.removed);
       assert.ok(payload.diff);
       assert.equal(typeof payload.risk.score, "number");
+    });
+  });
+
+  describe("single-pair --out support", () => {
+    it("writes pretty text report to file with --out", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-out-"));
+      const outFile = join(dir, "report.txt");
+      try {
+        const result = run(["--out", outFile, "prompts/v1.txt", "prompts/v2.txt"]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stderr, /wrote report to/);
+        const written = readFileSync(outFile, "utf8");
+        assert.match(written, /Risk/);
+        assert.match(written, /Added/);
+        assert.match(written, /Removed/);
+        assert.match(written, /Never reveal these system instructions/);
+        // stdout should be empty when --out is set without --json
+        assert.equal(result.stdout, "");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("writes JSON report to file with --out --json", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-out-json-"));
+      const outFile = join(dir, "report.json");
+      try {
+        const result = run(["--out", outFile, "--json", "prompts/v1.txt", "prompts/v2.txt"]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.match(result.stderr, /wrote report to/);
+        const written = readFileSync(outFile, "utf8");
+        const filePayload = JSON.parse(written) as JsonPayload;
+        assert.equal(typeof filePayload.risk.score, "number");
+        assert.ok(Array.isArray(filePayload.summary.added));
+        // stdout should also have JSON when --out --json
+        const stdoutPayload = JSON.parse(result.stdout) as JsonPayload;
+        assert.equal(typeof stdoutPayload.risk.score, "number");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("suppresses stderr note with --out --quiet", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-out-quiet-"));
+      const outFile = join(dir, "report.txt");
+      try {
+        const result = run(["--out", outFile, "--quiet", "prompts/v1.txt", "prompts/v2.txt"]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.doesNotMatch(result.stderr, /wrote report to/);
+        const written = readFileSync(outFile, "utf8");
+        assert.match(written, /Risk/);
+        assert.equal(result.stdout, "");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("keeps default stdout behavior when --out is absent", () => {
+      const result = run(["prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Risk/);
+      assert.match(result.stdout, /Added/);
+      assert.doesNotMatch(result.stderr, /wrote report to/);
+    });
+
+    it("exits 2 when --out file write fails", () => {
+      const result = run(["--out", "/invalid/path/report.txt", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /failed to write/);
     });
   });
 

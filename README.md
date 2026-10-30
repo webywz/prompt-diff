@@ -43,6 +43,8 @@ prompt-diff prompts/v1.txt prompts/v2.txt
 prompt-diff --old a.md --new b.md
 prompt-diff old.txt -                 # new prompt from stdin
 prompt-diff --json old.txt new.txt
+prompt-diff --out report.txt old.txt new.txt           # write pretty report to file
+prompt-diff --out report.json --json old.txt new.txt   # write JSON to file
 prompt-diff --format split old.txt new.txt
 prompt-diff --locale zh old.txt new.txt        # 中文终端输出
 prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
@@ -57,7 +59,7 @@ prompt-diff --suite examples/suite.json --json --out report.json
 | --- | --- |
 | `--old`, `--new` | Prompt files. `-` reads stdin (one side only). · 提示词文件；一侧可用 `-` 读 stdin |
 | `--suite <file>` | Process multiple pairs from JSON/YAML file (batch mode) · 从 JSON/YAML 文件批量处理多对提示词 |
-| `--out <file>` | Write report to file (suite mode) · 将报告写入文件（批量模式） |
+| `--out <file>` | Write report to file · 将报告写入文件 |
 | `--json` | Machine-readable JSON · 机器可读输出 |
 | `--tokens` / `--no-tokens` | Show / hide cl100k-ish token estimates (shown by default) · 显示 / 隐藏 token 估算（默认显示） |
 | `--format unified\|split` | Textual diff layout. Default `unified` · 文本 diff 布局，默认 `unified` |
@@ -137,9 +139,9 @@ In suite mode, `--fail-above` applies to `stats.maxScore` (the highest risk scor
 
 **`--out <file>` option · 选项:**
 
-Write the JSON report to disk. Useful for CI artifacts or downstream tools.
+Write the report to disk. In single-pair mode, writes pretty text by default or JSON when `--json` is set. In suite mode, always writes JSON. Useful for CI artifacts or downstream tools.
 
-将 JSON 报告写入磁盘，适用于 CI 产物或下游工具。
+将报告写入磁盘。单对模式下，默认写入格式化文本，或在设置 `--json` 时写入 JSON。批量模式下，总是写入 JSON。适用于 CI 产物或下游工具。
 
 Bundled fixtures: [`prompts/v1.txt`](prompts/v1.txt) · [`prompts/v2.txt`](prompts/v2.txt) — shipped in the npm package (verify with `npm pack`).
 
