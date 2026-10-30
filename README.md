@@ -30,9 +30,9 @@ npm i -g @webywz/prompt-diff
 npx @webywz/prompt-diff old.txt new.txt
 ```
 
-Requires **Node.js 18+**. Package: [`@webywz/prompt-diff`](https://www.npmjs.com/package/@webywz/prompt-diff). Binary: `prompt-diff`.
+Requires **Node.js 18.18+**. Package: [`@webywz/prompt-diff`](https://www.npmjs.com/package/@webywz/prompt-diff). Binary: `prompt-diff`.
 
-需要 **Node.js 18+**。包名 `@webywz/prompt-diff`，命令仍是 `prompt-diff`。
+需要 **Node.js 18.18+**。包名 `@webywz/prompt-diff`，命令仍是 `prompt-diff`。
 
 ---
 
@@ -46,6 +46,7 @@ prompt-diff --json old.txt new.txt
 prompt-diff --format split old.txt new.txt
 prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
 prompt-diff --github old.txt new.txt           # CI: PR annotations
+prompt-diff --github --quiet old.txt new.txt   # CI: annotations only (no pretty report)
 prompt-diff --github --max-annotations 10 old.txt new.txt
 ```
 
@@ -59,6 +60,7 @@ prompt-diff --github --max-annotations 10 old.txt new.txt
 | `--ai` | Optional one-paragraph semantic risk · 可选一段语义风险说明 |
 | `--fail-above <n>` | Exit `1` when risk score is `>= n` · 风险分 `>= n` 时退出码 `1` |
 | `--github` | Emit GitHub Actions `::notice` / `::warning` / `::error` annotations · 输出 Actions 注解，PR Checks 可见 |
+| `--quiet` | Suppress the pretty terminal report; `--json` / `--github` still emit · 抑制漂亮终端报告；`--json` / `--github` 仍照常输出 |
 | `--max-annotations <n>` | Cap annotation lines with `--github` (default `20`) · 限制 `--github` 注解条数（默认 20） |
 | `--no-color` | Disable ANSI colors · 关闭颜色 |
 | `-h` / `-v` | Help / version · 帮助 / 版本 |
@@ -80,9 +82,9 @@ Copy-paste workflow: [`examples/github-actions.yml`](examples/github-actions.yml
 
 可直接复制的 workflow：[`examples/github-actions.yml`](examples/github-actions.yml)。
 
-`--github` prints workflow commands (`::warning file=…::…`) so Checks / Files changed show intent, token, and regression findings. With `GITHUB_OUTPUT` set it also writes `score`, `level`, `identical`, `tokens_delta`. With `GITHUB_STEP_SUMMARY` set it appends a short Markdown job summary (risk / identical / token Δ / key findings). Use `--max-annotations <n>` to soft-cap PR noise (default 20). Combine with `--json` and annotations go to stderr so stdout stays parseable.
+`--github` prints workflow commands (`::warning file=…::…`) so Checks / Files changed show intent, token, and regression findings. With `GITHUB_OUTPUT` set it also writes `score`, `level`, `identical`, `tokens_delta`, `findings` (`findings` = `risk.factors.length`). With `GITHUB_STEP_SUMMARY` set it appends a short Markdown job summary (risk / identical / token Δ / key findings). Use `--max-annotations <n>` to soft-cap PR noise (default 20). `--quiet` suppresses the pretty terminal report only (`--json` / `--github` annotations, summary, and outputs still emit). Combine with `--json` and annotations go to stderr so stdout stays parseable.
 
-`--github` 输出 workflow 命令，PR Checks / Files 里能直接看到意图、token、回归风险。在 Actions 里还会写 `GITHUB_OUTPUT`（`score` / `level` / `identical` / `tokens_delta`），有 `GITHUB_STEP_SUMMARY` 时再追加一段简洁 Job Summary。`--max-annotations <n>` 可限制注解条数（默认 20）。与 `--json` 联用时注解走 stderr，stdout 仍是干净 JSON。
+`--github` 输出 workflow 命令，PR Checks / Files 里能直接看到意图、token、回归风险。在 Actions 里还会写 `GITHUB_OUTPUT`（`score` / `level` / `identical` / `tokens_delta` / `findings`，其中 `findings` = `risk.factors.length`），有 `GITHUB_STEP_SUMMARY` 时再追加一段简洁 Job Summary。`--max-annotations <n>` 可限制注解条数（默认 20）。`--quiet` 只抑制漂亮终端报告（`--json` / `--github` 注解、summary、outputs 仍照常）。与 `--json` 联用时注解走 stderr，stdout 仍是干净 JSON。
 
 ### Library · 库
 
@@ -117,8 +119,8 @@ console.log(estimateTokens(newPrompt));
   **Token 估算** — cl100k 近似（CJK ≈ 1 token/字；拉丁文混合估算）。不是完整 BPE。
 - **CI gate** — `--fail-above` for prompt regression checks in pipelines.
   **CI 门禁** — `--fail-above` 把 prompt 回归拦在流水线里。
-- **GitHub annotations** — `--github` emits Actions notices/warnings/errors for PR UI; optional Job Summary + `--max-annotations`.
-  **GitHub 注解** — `--github` 输出 Actions notice/warning/error；可选 Job Summary 与 `--max-annotations`。
+- **GitHub annotations** — `--github` emits Actions notices/warnings/errors for PR UI; optional Job Summary + `--max-annotations`; `--quiet` for annotations-only CI logs.
+  **GitHub 注解** — `--github` 输出 Actions notice/warning/error；可选 Job Summary 与 `--max-annotations`；`--quiet` 只留注解不打漂亮报告。
 - **Optional `--ai`** — one semantic paragraph when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set; without a key, heuristics still run.
   **可选 `--ai`** — 有 OpenAI / Anthropic Key 时多一段语义说明；没 Key 仍出本地结果。
 
