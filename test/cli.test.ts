@@ -159,6 +159,9 @@ describe("prompt-diff CLI", () => {
       const body = readFileSync(outFile, "utf8");
       assert.match(body, /^score=\d+$/m);
       assert.match(body, /^level=(low|medium|high|critical)$/m);
+      assert.match(body, /^identical=/m);
+      assert.match(body, /^tokens_delta=/m);
+      assert.match(body, /^findings=\d+$/m);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -205,5 +208,67 @@ describe("prompt-diff CLI", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("documents --quiet in help", () => {
+    const result = run(["--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /--quiet/);
+    assert.match(result.stdout, /pretty terminal report|findings/);
+  });
+
+  it("suppresses the pretty report with --quiet", () => {
+    const result = run(["--quiet", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /Risk/);
+  });
+
+  it("keeps --json stdout with --quiet", () => {
+    const result = run(["--quiet", "--json", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout) as JsonPayload;
+    assert.equal(typeof payload.risk.score, "number");
+  });
+
+  it("keeps --github annotations with --quiet (no pretty group)", () => {
+    const result = run(["--github", "--quiet", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /::(error|warning|notice) /);
+    assert.doesNotMatch(result.stdout, /::group::prompt-diff report/);
+    assert.doesNotMatch(result.stdout, /::endgroup::/);
+  });
+
+  it("writes findings to GITHUB_OUTPUT with --github --quiet", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-diff-cli-findings-"));
+    const outFile = join(dir, "out");
+    try {
+      const result = run(["--github", "--quiet", "prompts/v1.txt", "prompts/v2.txt"], {
+        env: { GITHUB_OUTPUT: outFile },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const body = readFileSync(outFile, "utf8");
+      assert.match(body, /^findings=\d+$/m);
+      assert.match(result.stdout, /::(error|warning|notice) /);
+      assert.equal(result.stdout.includes("::group::"), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps engines and README Node requirement aligned at 18.18+", () => {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      engines?: { node?: string };
+      version: string;
+    };
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    assert.equal(pkg.engines?.node, ">=18.18.0");
+    assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
+    assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
+    assert.equal(pkg.version, "0.1.4");
+    const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
+    assert.match(example, /@webywz\/prompt-diff@\^0\.1\.4/);
+    assert.match(example, /--quiet/);
+    assert.match(example, /findings/);
   });
 });

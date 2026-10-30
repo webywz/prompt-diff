@@ -162,11 +162,13 @@ export function formatGitHubAnnotations(
 export function appendGitHubJobOutput(result: PromptDiffResult): void {
   const path = process.env.GITHUB_OUTPUT;
   if (!path) return;
+  // findings = count of risk scoring factors (same set used in the risk report).
   const body = [
     `score=${result.risk.score}`,
     `level=${result.risk.level}`,
     `identical=${result.identical}`,
     `tokens_delta=${result.stats.delta.tokens}`,
+    `findings=${result.risk.factors.length}`,
   ].join("\n");
   appendFileSync(path, `${body}\n`, "utf8");
 }

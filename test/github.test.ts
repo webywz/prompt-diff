@@ -83,6 +83,9 @@ describe("github annotations", () => {
       assert.match(body, /^level=(low|medium|high|critical)$/m);
       assert.match(body, /^identical=false$/m);
       assert.match(body, /^tokens_delta=/m);
+      assert.match(body, /^findings=\d+$/m);
+      const findingsLine = body.split("\n").find((l) => l.startsWith("findings="));
+      assert.equal(findingsLine, `findings=${result.risk.factors.length}`);
     } finally {
       if (prev === undefined) delete process.env.GITHUB_OUTPUT;
       else process.env.GITHUB_OUTPUT = prev;

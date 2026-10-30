@@ -25,6 +25,7 @@ Options:
   --new <file>             New prompt (use - for stdin)
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
+  --quiet                  Suppress the pretty terminal report (--json / --github still emit)
   --tokens                 Show token estimates (default: on)
   --no-tokens              Hide token estimates
   --format unified|split   Textual diff layout (default: unified)
@@ -44,8 +45,9 @@ Exit codes:
 Heuristic path is always local and free. --ai is optional and never required.
 With --github, annotations go to stdout (or stderr when combined with --json) so
 PR Checks can surface intent / token / regression findings. Job outputs
-score/level/identical/tokens_delta are written when GITHUB_OUTPUT is set.
-A short Markdown job summary is appended when GITHUB_STEP_SUMMARY is set.
+score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is set
+(findings = risk.factors.length). A short Markdown job summary is appended when
+GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
 `;
 
 function printHelp(): void {
@@ -62,6 +64,7 @@ interface CliValues {
   new?: string;
   json: boolean;
   github: boolean;
+  quiet: boolean;
   tokens: boolean;
   "no-tokens": boolean;
   format: string;
@@ -83,6 +86,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         new: { type: "string" },
         json: { type: "boolean", default: false },
         github: { type: "boolean", default: false },
+        quiet: { type: "boolean", default: false },
         tokens: { type: "boolean", default: false },
         "no-tokens": { type: "boolean", default: false },
         format: { type: "string", default: "unified" },
@@ -211,8 +215,10 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(
       `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
     );
-  } else if (values.github) {
-    process.stdout.write("::group::prompt-diff report\n");
+  } else if (!values.quiet) {
+    if (values.github) {
+      process.stdout.write("::group::prompt-diff report\n");
+    }
     process.stdout.write(
       formatHuman(result, oldText, newText, {
         color,
@@ -224,19 +230,9 @@ async function main(argv: string[]): Promise<number> {
         semanticRisk,
       }),
     );
-    process.stdout.write("::endgroup::\n");
-  } else {
-    process.stdout.write(
-      formatHuman(result, oldText, newText, {
-        color,
-        tokens: showTokens,
-        format,
-        oldLabel: paths.old,
-        newLabel: paths.new,
-        columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
-        semanticRisk,
-      }),
-    );
+    if (values.github) {
+      process.stdout.write("::endgroup::\n");
+    }
   }
 
   if (failAbove !== undefined && result.risk.score >= failAbove) {
