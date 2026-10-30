@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { semanticRiskParagraph } from "./ai.js";
 import { diffPrompts } from "./diffPrompts.js";
 import { formatHuman, formatJson, shouldColor } from "./format.js";
+import { appendGitHubJobOutput, formatGitHubAnnotations } from "./github.js";
 import { readSource, resolvePromptPaths, UsageError } from "./io.js";
 import { packageVersion } from "./version.js";
 
@@ -13,11 +14,13 @@ Usage:
   prompt-diff --old <file> --new <file>
   prompt-diff old.txt -                 # new prompt from stdin
   prompt-diff --json old.txt new.txt
+  prompt-diff --github old.txt new.txt  # GitHub Actions annotations
 
 Options:
   --old <file>             Old prompt (use - for stdin)
   --new <file>             New prompt (use - for stdin)
   --json                   Machine-readable JSON
+  --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --tokens                 Show token estimates (default: on)
   --no-tokens              Hide token estimates
   --format unified|split   Textual diff layout (default: unified)
@@ -34,6 +37,9 @@ Exit codes:
   2  usage or I/O error
 
 Heuristic path is always local and free. --ai is optional and never required.
+With --github, annotations go to stdout (or stderr when combined with --json) so
+PR Checks can surface intent / token / regression findings. Job outputs
+score/level/identical/tokens_delta are written when GITHUB_OUTPUT is set.
 `;
 
 function printHelp(): void {
@@ -49,6 +55,7 @@ interface CliValues {
   old?: string;
   new?: string;
   json: boolean;
+  github: boolean;
   tokens: boolean;
   "no-tokens": boolean;
   format: string;
@@ -68,6 +75,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         old: { type: "string" },
         new: { type: "string" },
         json: { type: "boolean", default: false },
+        github: { type: "boolean", default: false },
         tokens: { type: "boolean", default: false },
         "no-tokens": { type: "boolean", default: false },
         format: { type: "string", default: "unified" },
@@ -152,15 +160,47 @@ async function main(argv: string[]): Promise<number> {
 
   const showTokens = !values["no-tokens"];
   const color = shouldColor({
-    noColor: values["no-color"],
+    noColor: values["no-color"] || values.github,
     json: values.json,
     stdoutIsTTY: Boolean(process.stdout.isTTY),
   });
+
+  if (values.github) {
+    const ann = formatGitHubAnnotations(result, {
+      oldLabel: paths.old,
+      newLabel: paths.new,
+      semanticRisk: semanticRisk ?? null,
+    });
+    // Keep --json stdout machine-parseable; annotations ride on stderr.
+    if (values.json) process.stderr.write(ann);
+    else process.stdout.write(ann);
+    try {
+      appendGitHubJobOutput(result);
+    } catch (err) {
+      process.stderr.write(
+        `prompt-diff: GITHUB_OUTPUT skipped (${err instanceof Error ? err.message : err})\n`,
+      );
+    }
+  }
 
   if (values.json) {
     process.stdout.write(
       `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
     );
+  } else if (values.github) {
+    process.stdout.write("::group::prompt-diff report\n");
+    process.stdout.write(
+      formatHuman(result, oldText, newText, {
+        color,
+        tokens: showTokens,
+        format,
+        oldLabel: paths.old,
+        newLabel: paths.new,
+        columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
+        semanticRisk,
+      }),
+    );
+    process.stdout.write("::endgroup::\n");
   } else {
     process.stdout.write(
       formatHuman(result, oldText, newText, {

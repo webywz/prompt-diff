@@ -1,0 +1,40 @@
+# Example: surface prompt regressions as PR annotations.
+# Copy into your app repo as .github/workflows/prompt-diff.yml
+# and point OLD/NEW at the prompts you actually ship.
+#
+# 示例：把 prompt 回归做成 PR 注解。
+# 复制到业务仓的 .github/workflows/prompt-diff.yml，改 OLD/NEW 路径即可。
+
+name: Prompt regression
+
+on:
+  pull_request:
+    paths:
+      - "prompts/**"
+      - "**/*prompt*"
+
+jobs:
+  prompt-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Diff prompts (annotations + CI gate)
+        id: diff
+        run: |
+          npx --yes @webywz/prompt-diff@^0.1.2 \
+            --github \
+            --fail-above 45 \
+            prompts/v1.txt \
+            prompts/v2.txt
+        # --github  → ::notice / ::warning / ::error on the PR Checks UI
+        # --fail-above → exit 1 when risk score crosses the gate
+        # When GITHUB_OUTPUT is set, also writes: score, level, identical, tokens_delta
+
+      # Optional: use job outputs from a composite / later step
+      # - name: Echo score
+      #   run: echo "risk ${{ steps.diff.outputs.score }} (${{ steps.diff.outputs.level }})"
