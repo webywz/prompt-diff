@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { semanticRiskParagraph } from "./ai.js";
 import { diffPrompts } from "./diffPrompts.js";
@@ -9,8 +10,10 @@ import {
   appendGitHubStepSummary,
   formatGitHubAnnotations,
 } from "./github.js";
+import { formatHtml, formatSuiteHtml } from "./html.js";
 import { readSource, readSuiteFile, resolvePromptPaths, UsageError } from "./io.js";
 import { processSuite } from "./suite.js";
+import type { Locale } from "./types.js";
 import { packageVersion } from "./version.js";
 
 const HELP = `prompt-diff — diff two LLM prompts like code
@@ -20,6 +23,8 @@ Usage:
   prompt-diff --old <file> --new <file>
   prompt-diff old.txt -                 # new prompt from stdin
   prompt-diff --json old.txt new.txt
+  prompt-diff old.txt new.txt --html
+  prompt-diff old.txt new.txt --html report.html
   prompt-diff --github old.txt new.txt  # GitHub Actions annotations
   prompt-diff --suite examples/suite.json --json  # batch mode
 
@@ -28,9 +33,10 @@ Options:
   --new <file>             New prompt (use - for stdin)
   --suite <file>           Process multiple pairs from JSON/YAML file
   --out <file>             Write report to file
+  --html [path]            Self-contained HTML report (stdout, or write to path; offline, no CDN)
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
-  --quiet                  Suppress the pretty terminal report (--json / --github still emit)
+  --quiet                  Suppress the pretty terminal report (--json / --html / --github still emit)
   --tokens                 Show token estimates (default: on)
   --no-tokens              Hide token estimates
   --format unified|split   Textual diff layout (default: unified)
@@ -49,16 +55,18 @@ Exit codes:
   2  usage or I/O error
 
 Heuristic path is always local and free. --ai is optional and never required.
-With --github, annotations go to stdout (or stderr when combined with --json) so
-PR Checks can surface intent / token / regression findings. Job outputs
+With --github, annotations go to stdout (or stderr when combined with --json / --html)
+so PR Checks can surface intent / token / regression findings. Job outputs
 score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is set
 (findings = risk.factors.length). A short Markdown job summary is appended when
 GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
+--html and --json cannot share stdout; pick one primary export.
 
 Suite mode (--suite <file.json|yml>): process multiple prompt pairs from a file.
 File format: array of {id?, old, new}. With --json, outputs aggregated report
-with pairs[] and stats{count, maxScore, avgScore, failed?}. --fail-above applies
-to stats.maxScore across the entire suite.
+with pairs[] and stats{count, maxScore, avgScore, failed?}. --html renders the
+same suite as a self-contained report. --fail-above applies to stats.maxScore
+across the entire suite.
 `;
 
 function printHelp(): void {
@@ -75,6 +83,8 @@ interface CliValues {
   new?: string;
   suite?: string;
   out?: string;
+  /** `true` = HTML on stdout; string = write that path. */
+  html?: string | true;
   json: boolean;
   github: boolean;
   quiet: boolean;
@@ -91,10 +101,37 @@ interface CliValues {
   version: boolean;
 }
 
+/** Optional `--html [path]` is not expressible with util.parseArgs; peel it first. */
+function peelHtmlFlag(argv: string[]): { argv: string[]; html?: string | true } {
+  const out: string[] = [];
+  let html: string | true | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!;
+    if (arg === "--html") {
+      const next = argv[i + 1];
+      if (next && !next.startsWith("-")) {
+        html = next;
+        i += 1;
+      } else {
+        html = true;
+      }
+      continue;
+    }
+    if (arg.startsWith("--html=")) {
+      const inline = arg.slice("--html=".length);
+      html = inline === "" ? true : inline;
+      continue;
+    }
+    out.push(arg);
+  }
+  return { argv: out, html };
+}
+
 function parseCli(argv: string[]): { values: CliValues; positionals: string[] } {
+  const peeled = peelHtmlFlag(argv);
   try {
     const { values, positionals } = parseArgs({
-      args: argv,
+      args: peeled.argv,
       options: {
         old: { type: "string" },
         new: { type: "string" },
@@ -118,9 +155,34 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
       allowPositionals: true,
       strict: true,
     });
-    return { values: values as CliValues, positionals };
+    return { values: { ...(values as CliValues), html: peeled.html }, positionals };
   } catch (err) {
     failUsage(err instanceof Error ? err.message : String(err));
+  }
+}
+
+function resolveLocale(raw: string | undefined): Locale {
+  if (raw === undefined) return "en";
+  if (raw !== "en" && raw !== "zh") {
+    failUsage(`--locale must be en or zh (got ${raw})`);
+  }
+  return raw;
+}
+
+async function writeHtmlFile(path: string, html: string, quiet: boolean): Promise<number | undefined> {
+  try {
+    await mkdir(dirname(path), { recursive: true });
+    const payload = html.endsWith("\n") ? html : `${html}\n`;
+    await writeFile(path, payload, "utf8");
+    if (!quiet) {
+      process.stderr.write(`prompt-diff: wrote html report to ${path}\n`);
+    }
+    return undefined;
+  } catch (err) {
+    process.stderr.write(
+      `prompt-diff: failed to write ${path}: ${err instanceof Error ? err.message : err}\n`,
+    );
+    return 2;
   }
 }
 
@@ -134,6 +196,10 @@ async function main(argv: string[]): Promise<number> {
   if (values.version) {
     process.stdout.write(`${packageVersion()}\n`);
     return 0;
+  }
+
+  if (values.html && values.json) {
+    failUsage("--html cannot be combined with --json (choose one primary export)");
   }
 
   // Suite mode
@@ -155,13 +221,9 @@ async function main(argv: string[]): Promise<number> {
     failUsage(`--format must be unified or split (got ${format})`);
   }
 
-  let locale: "en" | "zh" = "en";
-  if (values.locale !== undefined) {
-    if (values.locale !== "en" && values.locale !== "zh") {
-      failUsage(`--locale must be en or zh (got ${values.locale})`);
-    }
-    locale = values.locale;
-  }
+  const locale = resolveLocale(values.locale);
+  const htmlOnStdout = values.html === true;
+  const htmlPath = typeof values.html === "string" ? values.html : undefined;
 
   const context = Number(values.context);
   if (!Number.isInteger(context) || context < 0) {
@@ -223,8 +285,8 @@ async function main(argv: string[]): Promise<number> {
       semanticRisk: semanticRisk ?? null,
       maxAnnotations,
     });
-    // Keep --json stdout machine-parseable; annotations ride on stderr.
-    if (values.json) process.stderr.write(ann);
+    // Keep --json / --html stdout parseable; annotations ride on stderr.
+    if (values.json || htmlOnStdout) process.stderr.write(ann);
     else process.stdout.write(ann);
     try {
       appendGitHubJobOutput(result);
@@ -270,31 +332,47 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
-  // Write to stdout
-  if (values.json || !values.out) {
-    if (values.json) {
-      process.stdout.write(
-        `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
-      );
-    } else if (!values.quiet) {
-      if (values.github) {
-        process.stdout.write("::group::prompt-diff report\n");
-      }
-      process.stdout.write(
-        formatHuman(result, oldText, newText, {
-          color,
-          tokens: showTokens,
-          format,
+  const html =
+    values.html !== undefined
+      ? formatHtml(result, {
+          locale,
           oldLabel: paths.old,
           newLabel: paths.new,
-          columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
-          semanticRisk,
-          locale,
-        }),
-      );
-      if (values.github) {
-        process.stdout.write("::endgroup::\n");
-      }
+          semanticRisk: semanticRisk ?? null,
+          tokens: showTokens,
+        })
+      : undefined;
+
+  if (htmlPath && html !== undefined) {
+    const writeErr = await writeHtmlFile(htmlPath, html, values.quiet);
+    if (writeErr !== undefined) return writeErr;
+  }
+
+  // Write to stdout
+  if (values.json) {
+    process.stdout.write(
+      `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
+    );
+  } else if (htmlOnStdout && html !== undefined) {
+    process.stdout.write(html.endsWith("\n") ? html : `${html}\n`);
+  } else if (!values.out && !htmlPath && !values.quiet) {
+    if (values.github) {
+      process.stdout.write("::group::prompt-diff report\n");
+    }
+    process.stdout.write(
+      formatHuman(result, oldText, newText, {
+        color,
+        tokens: showTokens,
+        format,
+        oldLabel: paths.old,
+        newLabel: paths.new,
+        columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
+        semanticRisk,
+        locale,
+      }),
+    );
+    if (values.github) {
+      process.stdout.write("::endgroup::\n");
     }
   }
 
@@ -311,6 +389,11 @@ async function runSuiteMode(values: CliValues): Promise<number> {
   if (!values.suite) {
     throw new Error("Suite file is required");
   }
+
+  const locale = resolveLocale(values.locale);
+  const htmlOnStdout = values.html === true;
+  const htmlPath = typeof values.html === "string" ? values.html : undefined;
+  const showTokens = !values["no-tokens"];
 
   const context = Number(values.context);
   if (!Number.isInteger(context) || context < 0) {
@@ -336,6 +419,8 @@ async function runSuiteMode(values: CliValues): Promise<number> {
   const report = await processSuite(pairs, { context });
 
   const output = JSON.stringify(report, null, 2);
+  const html =
+    values.html !== undefined ? formatSuiteHtml(report, { locale, tokens: showTokens }) : undefined;
 
   if (values.out) {
     try {
@@ -351,9 +436,16 @@ async function runSuiteMode(values: CliValues): Promise<number> {
     }
   }
 
-  if (values.json || !values.out) {
+  if (htmlPath && html !== undefined) {
+    const writeErr = await writeHtmlFile(htmlPath, html, values.quiet);
+    if (writeErr !== undefined) return writeErr;
+  }
+
+  if (htmlOnStdout && html !== undefined) {
+    process.stdout.write(html.endsWith("\n") ? html : `${html}\n`);
+  } else if (values.json || (!values.out && !htmlPath)) {
     process.stdout.write(`${output}\n`);
-  } else if (!values.quiet) {
+  } else if (!values.quiet && !htmlPath) {
     process.stdout.write(
       `Suite processed: ${report.stats.count} pairs, ` +
       `maxScore=${report.stats.maxScore}, avgScore=${report.stats.avgScore}` +
