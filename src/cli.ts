@@ -3,7 +3,11 @@ import { parseArgs } from "node:util";
 import { semanticRiskParagraph } from "./ai.js";
 import { diffPrompts } from "./diffPrompts.js";
 import { formatHuman, formatJson, shouldColor } from "./format.js";
-import { appendGitHubJobOutput, formatGitHubAnnotations } from "./github.js";
+import {
+  appendGitHubJobOutput,
+  appendGitHubStepSummary,
+  formatGitHubAnnotations,
+} from "./github.js";
 import { readSource, resolvePromptPaths, UsageError } from "./io.js";
 import { packageVersion } from "./version.js";
 
@@ -27,6 +31,7 @@ Options:
   --context <n>            Unified diff context lines (default: 3)
   --ai                     One-paragraph semantic risk (OPENAI_API_KEY or ANTHROPIC_API_KEY)
   --fail-above <n>         Exit 1 if risk score is >= n
+  --max-annotations <n>    Cap GitHub annotation lines (default: 20)
   --no-color               Disable ANSI colors
   -h, --help               Show help
   -v, --version            Show version
@@ -40,6 +45,7 @@ Heuristic path is always local and free. --ai is optional and never required.
 With --github, annotations go to stdout (or stderr when combined with --json) so
 PR Checks can surface intent / token / regression findings. Job outputs
 score/level/identical/tokens_delta are written when GITHUB_OUTPUT is set.
+A short Markdown job summary is appended when GITHUB_STEP_SUMMARY is set.
 `;
 
 function printHelp(): void {
@@ -62,6 +68,7 @@ interface CliValues {
   context: string;
   ai: boolean;
   "fail-above"?: string;
+  "max-annotations"?: string;
   "no-color": boolean;
   help: boolean;
   version: boolean;
@@ -82,6 +89,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         context: { type: "string", default: "3" },
         ai: { type: "boolean", default: false },
         "fail-above": { type: "string" },
+        "max-annotations": { type: "string" },
         "no-color": { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
         version: { type: "boolean", short: "v", default: false },
@@ -133,6 +141,14 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
+  let maxAnnotations = 20;
+  if (values["max-annotations"] !== undefined) {
+    maxAnnotations = Number(values["max-annotations"]);
+    if (!Number.isInteger(maxAnnotations) || maxAnnotations < 1) {
+      failUsage("--max-annotations must be a positive integer");
+    }
+  }
+
   let oldText: string;
   let newText: string;
   try {
@@ -170,6 +186,7 @@ async function main(argv: string[]): Promise<number> {
       oldLabel: paths.old,
       newLabel: paths.new,
       semanticRisk: semanticRisk ?? null,
+      maxAnnotations,
     });
     // Keep --json stdout machine-parseable; annotations ride on stderr.
     if (values.json) process.stderr.write(ann);
@@ -179,6 +196,13 @@ async function main(argv: string[]): Promise<number> {
     } catch (err) {
       process.stderr.write(
         `prompt-diff: GITHUB_OUTPUT skipped (${err instanceof Error ? err.message : err})\n`,
+      );
+    }
+    try {
+      appendGitHubStepSummary(result);
+    } catch (err) {
+      process.stderr.write(
+        `prompt-diff: GITHUB_STEP_SUMMARY skipped (${err instanceof Error ? err.message : err})\n`,
       );
     }
   }

@@ -163,4 +163,47 @@ describe("prompt-diff CLI", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("documents --max-annotations in help", () => {
+    const result = run(["--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /--max-annotations/);
+  });
+
+  it("rejects non-positive --max-annotations", () => {
+    const result = run(["--github", "--max-annotations", "0", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /max-annotations/);
+  });
+
+  it("honors --max-annotations with --github", () => {
+    const result = run([
+      "--github",
+      "--max-annotations",
+      "2",
+      "prompts/v1.txt",
+      "prompts/v2.txt",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const ann = result.stdout
+      .split("\n")
+      .filter((l) => /^::(error|warning|notice) /.test(l));
+    assert.equal(ann.length, 2);
+  });
+
+  it("writes GITHUB_STEP_SUMMARY with --github", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-diff-cli-sum-"));
+    const sumFile = join(dir, "summary.md");
+    try {
+      const result = run(["--github", "prompts/v1.txt", "prompts/v2.txt"], {
+        env: { GITHUB_STEP_SUMMARY: sumFile },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const body = readFileSync(sumFile, "utf8");
+      assert.match(body, /## prompt-diff/);
+      assert.match(body, /Risk/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

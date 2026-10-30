@@ -5,9 +5,11 @@ export { formatHuman, formatJson } from "./format.js";
 export {
   annotation,
   appendGitHubJobOutput,
+  appendGitHubStepSummary,
   escapeData,
   escapeProperty,
   formatGitHubAnnotations,
+  formatGitHubStepSummary,
 } from "./github.js";
 export type { GitHubFormatOptions } from "./github.js";
 export { riskLevel, scoreRisk } from "./risk.js";

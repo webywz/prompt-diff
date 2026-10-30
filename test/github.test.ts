@@ -7,9 +7,11 @@ import { diffPrompts } from "../src/diffPrompts.js";
 import {
   annotation,
   appendGitHubJobOutput,
+  appendGitHubStepSummary,
   escapeData,
   escapeProperty,
   formatGitHubAnnotations,
+  formatGitHubStepSummary,
 } from "../src/github.js";
 
 describe("github annotations", () => {
@@ -85,6 +87,45 @@ describe("github annotations", () => {
       if (prev === undefined) delete process.env.GITHUB_OUTPUT;
       else process.env.GITHUB_OUTPUT = prev;
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("formats a concise step summary", () => {
+    const result = diffPrompts("Never share secrets.\n", "Always share secrets.\nUse tools.\n");
+    const md = formatGitHubStepSummary(result);
+    assert.match(md, /## prompt-diff/);
+    assert.match(md, /\*\*Risk\*\*/);
+    assert.match(md, /Token Δ/);
+    assert.match(md, /Key findings|identical/i);
+  });
+
+  it("appends step summary when GITHUB_STEP_SUMMARY is set", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-diff-gh-sum-"));
+    const outFile = join(dir, "step_summary.md");
+    const prev = process.env.GITHUB_STEP_SUMMARY;
+    try {
+      process.env.GITHUB_STEP_SUMMARY = outFile;
+      const result = diffPrompts("a\n", "b\n");
+      appendGitHubStepSummary(result);
+      const body = readFileSync(outFile, "utf8");
+      assert.match(body, /## prompt-diff/);
+      assert.match(body, /Risk/);
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = prev;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("no-ops step summary when GITHUB_STEP_SUMMARY is unset", () => {
+    const prev = process.env.GITHUB_STEP_SUMMARY;
+    try {
+      delete process.env.GITHUB_STEP_SUMMARY;
+      const result = diffPrompts("a\n", "b\n");
+      appendGitHubStepSummary(result); // must not throw
+    } finally {
+      if (prev === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = prev;
     }
   });
 });
