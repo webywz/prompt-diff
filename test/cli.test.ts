@@ -265,11 +265,69 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.6");
+    assert.equal(pkg.version, "0.1.7");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
     assert.match(example, /findings/);
+  });
+
+  describe("locale support", () => {
+    it("documents --locale in help", () => {
+      const result = run(["--help"]);
+      assert.equal(result.status, 0);
+      assert.match(result.stdout, /--locale <en\|zh>/);
+    });
+
+    it("defaults to English output", () => {
+      const result = run(["prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Risk/);
+      assert.match(result.stdout, /Summary/);
+      assert.match(result.stdout, /Added/);
+      assert.match(result.stdout, /Removed/);
+      assert.match(result.stdout, /Diff/);
+    });
+
+    it("outputs Chinese with --locale zh", () => {
+      const result = run(["--locale", "zh", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /风险/);
+      assert.match(result.stdout, /摘要/);
+      assert.match(result.stdout, /新增/);
+      assert.match(result.stdout, /删除/);
+      assert.match(result.stdout, /差异/);
+      assert.doesNotMatch(result.stdout, /\bRisk\b/);
+      assert.doesNotMatch(result.stdout, /\bSummary\b/);
+    });
+
+    it("outputs English with --locale en explicitly", () => {
+      const result = run(["--locale", "en", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Risk/);
+      assert.match(result.stdout, /Summary/);
+      assert.match(result.stdout, /Added/);
+      assert.match(result.stdout, /Removed/);
+      assert.doesNotMatch(result.stdout, /风险/);
+    });
+
+    it("rejects invalid --locale value", () => {
+      const result = run(["--locale", "fr", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /--locale must be en or zh/);
+    });
+
+    it("does not affect JSON output keys with --locale zh", () => {
+      const result = run(["--locale", "zh", "--json", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 0, result.stderr);
+      const payload = JSON.parse(result.stdout) as JsonPayload;
+      assert.ok(payload.risk);
+      assert.ok(payload.summary);
+      assert.ok(payload.summary.added);
+      assert.ok(payload.summary.removed);
+      assert.ok(payload.diff);
+      assert.equal(typeof payload.risk.score, "number");
+    });
   });
 
   describe("suite / batch mode", () => {

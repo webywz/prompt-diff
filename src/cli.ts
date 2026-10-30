@@ -35,6 +35,7 @@ Options:
   --no-tokens              Hide token estimates
   --format unified|split   Textual diff layout (default: unified)
   --context <n>            Unified diff context lines (default: 3)
+  --locale <en|zh>         Output language for terminal reports (default: en)
   --ai                     One-paragraph semantic risk (OPENAI_API_KEY or ANTHROPIC_API_KEY)
   --fail-above <n>         Exit 1 if risk score is >= n (suite mode: applies to maxScore)
   --max-annotations <n>    Cap GitHub annotation lines (default: 20)
@@ -81,6 +82,7 @@ interface CliValues {
   "no-tokens": boolean;
   format: string;
   context: string;
+  locale?: string;
   ai: boolean;
   "fail-above"?: string;
   "max-annotations"?: string;
@@ -105,6 +107,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         "no-tokens": { type: "boolean", default: false },
         format: { type: "string", default: "unified" },
         context: { type: "string", default: "3" },
+        locale: { type: "string" },
         ai: { type: "boolean", default: false },
         "fail-above": { type: "string" },
         "max-annotations": { type: "string" },
@@ -150,6 +153,14 @@ async function main(argv: string[]): Promise<number> {
   const format = values.format;
   if (format !== "unified" && format !== "split") {
     failUsage(`--format must be unified or split (got ${format})`);
+  }
+
+  let locale: "en" | "zh" = "en";
+  if (values.locale !== undefined) {
+    if (values.locale !== "en" && values.locale !== "zh") {
+      failUsage(`--locale must be en or zh (got ${values.locale})`);
+    }
+    locale = values.locale;
   }
 
   const context = Number(values.context);
@@ -248,6 +259,7 @@ async function main(argv: string[]): Promise<number> {
         newLabel: paths.new,
         columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
         semanticRisk,
+        locale,
       }),
     );
     if (values.github) {
