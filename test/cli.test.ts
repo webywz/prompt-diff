@@ -123,4 +123,44 @@ describe("prompt-diff CLI", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stderr, /--ai skipped/);
   });
+
+  it("documents --github in help", () => {
+    const result = run(["--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /--github/);
+    assert.match(result.stdout, /GitHub Actions annotations/);
+  });
+
+  it("emits GitHub Actions annotations with --github", () => {
+    const result = run(["--github", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /::(error|warning|notice) /);
+    assert.match(result.stdout, /::group::prompt-diff report/);
+    assert.match(result.stdout, /::endgroup::/);
+    assert.match(result.stdout, /Risk/);
+  });
+
+  it("keeps --json stdout clean when combined with --github", () => {
+    const result = run(["--github", "--json", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout) as JsonPayload;
+    assert.equal(typeof payload.risk.score, "number");
+    assert.match(result.stderr, /::(error|warning|notice) /);
+  });
+
+  it("writes GITHUB_OUTPUT fields with --github", () => {
+    const dir = mkdtempSync(join(tmpdir(), "prompt-diff-cli-gh-"));
+    const outFile = join(dir, "out");
+    try {
+      const result = run(["--github", "prompts/v1.txt", "prompts/v2.txt"], {
+        env: { GITHUB_OUTPUT: outFile },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const body = readFileSync(outFile, "utf8");
+      assert.match(body, /^score=\d+$/m);
+      assert.match(body, /^level=(low|medium|high|critical)$/m);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

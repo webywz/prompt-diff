@@ -45,6 +45,7 @@ prompt-diff old.txt -                 # new prompt from stdin
 prompt-diff --json old.txt new.txt
 prompt-diff --format split old.txt new.txt
 prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
+prompt-diff --github old.txt new.txt           # CI: PR annotations
 ```
 
 | Flag | What it does · 作用 |
@@ -56,6 +57,7 @@ prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
 | `--context <n>` | Unified-diff context lines. Default `3` · unified 上下文行数 |
 | `--ai` | Optional one-paragraph semantic risk · 可选一段语义风险说明 |
 | `--fail-above <n>` | Exit `1` when risk score is `>= n` · 风险分 `>= n` 时退出码 `1` |
+| `--github` | Emit GitHub Actions `::notice` / `::warning` / `::error` annotations · 输出 Actions 注解，PR Checks 可见 |
 | `--no-color` | Disable ANSI colors · 关闭颜色 |
 | `-h` / `-v` | Help / version · 帮助 / 版本 |
 
@@ -68,9 +70,17 @@ Bundled fixtures: [`prompts/v1.txt`](prompts/v1.txt) · [`prompts/v2.txt`](promp
 示例文件：`prompts/v1.txt` 与 `prompts/v2.txt`。
 
 ```bash
-# GitHub Actions
-npx @webywz/prompt-diff --fail-above 45 old.txt new.txt
+# GitHub Actions — gate + PR annotations
+npx @webywz/prompt-diff --github --fail-above 45 old.txt new.txt
 ```
+
+Copy-paste workflow: [`examples/github-actions.yml`](examples/github-actions.yml).
+
+可直接复制的 workflow：[`examples/github-actions.yml`](examples/github-actions.yml)。
+
+`--github` prints workflow commands (`::warning file=…::…`) so Checks / Files changed show intent, token, and regression findings. With `GITHUB_OUTPUT` set it also writes `score`, `level`, `identical`, `tokens_delta`. Combine with `--json` and annotations go to stderr so stdout stays parseable.
+
+`--github` 输出 workflow 命令，PR Checks / Files 里能直接看到意图、token、回归风险。在 Actions 里还会写 `GITHUB_OUTPUT`（`score` / `level` / `identical` / `tokens_delta`）。与 `--json` 联用时注解走 stderr，stdout 仍是干净 JSON。
 
 ### Library · 库
 
@@ -105,6 +115,8 @@ console.log(estimateTokens(newPrompt));
   **Token 估算** — cl100k 近似（CJK ≈ 1 token/字；拉丁文混合估算）。不是完整 BPE。
 - **CI gate** — `--fail-above` for prompt regression checks in pipelines.
   **CI 门禁** — `--fail-above` 把 prompt 回归拦在流水线里。
+- **GitHub annotations** — `--github` emits Actions notices/warnings/errors for PR UI.
+  **GitHub 注解** — `--github` 输出 Actions notice/warning/error，PR 界面可见。
 - **Optional `--ai`** — one semantic paragraph when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set; without a key, heuristics still run.
   **可选 `--ai`** — 有 OpenAI / Anthropic Key 时多一段语义说明；没 Key 仍出本地结果。
 
