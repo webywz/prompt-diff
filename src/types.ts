@@ -87,3 +87,29 @@ export interface JsonPayload {
   diff: { unified: string };
   semanticRisk: string | null;
 }
+
+export interface SuitePairInput {
+  id?: string;
+  old: string;
+  new: string;
+}
+
+export interface SuitePairResult {
+  id: string;
+  old: string;
+  new: string;
+  result: PromptDiffResult;
+  error?: string;
+}
+
+export interface SuiteStats {
+  count: number;
+  maxScore: number;
+  avgScore: number;
+  failed?: number;
+}
+
+export interface SuiteReport {
+  pairs: SuitePairResult[];
+  stats: SuiteStats;
+}

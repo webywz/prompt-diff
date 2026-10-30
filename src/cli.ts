@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { semanticRiskParagraph } from "./ai.js";
 import { diffPrompts } from "./diffPrompts.js";
@@ -8,7 +9,8 @@ import {
   appendGitHubStepSummary,
   formatGitHubAnnotations,
 } from "./github.js";
-import { readSource, resolvePromptPaths, UsageError } from "./io.js";
+import { readSource, readSuiteFile, resolvePromptPaths, UsageError } from "./io.js";
+import { processSuite } from "./suite.js";
 import { packageVersion } from "./version.js";
 
 const HELP = `prompt-diff — diff two LLM prompts like code
@@ -19,10 +21,13 @@ Usage:
   prompt-diff old.txt -                 # new prompt from stdin
   prompt-diff --json old.txt new.txt
   prompt-diff --github old.txt new.txt  # GitHub Actions annotations
+  prompt-diff --suite examples/suite.json --json  # batch mode
 
 Options:
   --old <file>             Old prompt (use - for stdin)
   --new <file>             New prompt (use - for stdin)
+  --suite <file>           Process multiple pairs from JSON/YAML file
+  --out <file>             Write report to file (suite mode)
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --github still emit)
@@ -31,7 +36,7 @@ Options:
   --format unified|split   Textual diff layout (default: unified)
   --context <n>            Unified diff context lines (default: 3)
   --ai                     One-paragraph semantic risk (OPENAI_API_KEY or ANTHROPIC_API_KEY)
-  --fail-above <n>         Exit 1 if risk score is >= n
+  --fail-above <n>         Exit 1 if risk score is >= n (suite mode: applies to maxScore)
   --max-annotations <n>    Cap GitHub annotation lines (default: 20)
   --no-color               Disable ANSI colors
   -h, --help               Show help
@@ -48,6 +53,11 @@ PR Checks can surface intent / token / regression findings. Job outputs
 score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is set
 (findings = risk.factors.length). A short Markdown job summary is appended when
 GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
+
+Suite mode (--suite <file.json|yml>): process multiple prompt pairs from a file.
+File format: array of {id?, old, new}. With --json, outputs aggregated report
+with pairs[] and stats{count, maxScore, avgScore, failed?}. --fail-above applies
+to stats.maxScore across the entire suite.
 `;
 
 function printHelp(): void {
@@ -62,6 +72,8 @@ function failUsage(message: string): never {
 interface CliValues {
   old?: string;
   new?: string;
+  suite?: string;
+  out?: string;
   json: boolean;
   github: boolean;
   quiet: boolean;
@@ -84,6 +96,8 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
       options: {
         old: { type: "string" },
         new: { type: "string" },
+        suite: { type: "string" },
+        out: { type: "string" },
         json: { type: "boolean", default: false },
         github: { type: "boolean", default: false },
         quiet: { type: "boolean", default: false },
@@ -119,6 +133,12 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  // Suite mode
+  if (values.suite) {
+    return await runSuiteMode(values);
+  }
+
+  // Single-pair mode (existing logic)
   let paths: { old: string; new: string };
   try {
     paths = resolvePromptPaths(positionals, { old: values.old, new: values.new });
@@ -241,6 +261,70 @@ async function main(argv: string[]): Promise<number> {
     );
     return 1;
   }
+  return 0;
+}
+
+async function runSuiteMode(values: CliValues): Promise<number> {
+  if (!values.suite) {
+    throw new Error("Suite file is required");
+  }
+
+  const context = Number(values.context);
+  if (!Number.isInteger(context) || context < 0) {
+    failUsage("--context must be a non-negative integer");
+  }
+
+  let failAbove: number | undefined;
+  if (values["fail-above"] !== undefined) {
+    failAbove = Number(values["fail-above"]);
+    if (!Number.isFinite(failAbove) || failAbove < 0 || failAbove > 100) {
+      failUsage("--fail-above must be a number between 0 and 100");
+    }
+  }
+
+  let pairs;
+  try {
+    pairs = await readSuiteFile(values.suite);
+  } catch (err) {
+    if (err instanceof UsageError) failUsage(err.message);
+    throw err;
+  }
+
+  const report = await processSuite(pairs, { context });
+
+  const output = JSON.stringify(report, null, 2);
+
+  if (values.out) {
+    try {
+      await writeFile(values.out, `${output}\n`, "utf8");
+      if (!values.quiet) {
+        process.stderr.write(`prompt-diff: wrote suite report to ${values.out}\n`);
+      }
+    } catch (err) {
+      process.stderr.write(
+        `prompt-diff: failed to write ${values.out}: ${err instanceof Error ? err.message : err}\n`,
+      );
+      return 2;
+    }
+  }
+
+  if (values.json || !values.out) {
+    process.stdout.write(`${output}\n`);
+  } else if (!values.quiet) {
+    process.stdout.write(
+      `Suite processed: ${report.stats.count} pairs, ` +
+      `maxScore=${report.stats.maxScore}, avgScore=${report.stats.avgScore}` +
+      (report.stats.failed ? `, failed=${report.stats.failed}` : "") + "\n",
+    );
+  }
+
+  if (failAbove !== undefined && report.stats.maxScore >= failAbove) {
+    process.stderr.write(
+      `prompt-diff: suite maxScore ${report.stats.maxScore} >= ${failAbove}\n`,
+    );
+    return 1;
+  }
+
   return 0;
 }
 

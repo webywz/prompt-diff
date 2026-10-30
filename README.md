@@ -48,17 +48,21 @@ prompt-diff --fail-above 45 old.txt new.txt    # CI: exit 1 if risk >= 45
 prompt-diff --github old.txt new.txt           # CI: PR annotations
 prompt-diff --github --quiet old.txt new.txt   # CI: annotations only (no pretty report)
 prompt-diff --github --max-annotations 10 old.txt new.txt
+prompt-diff --suite examples/suite.json --json  # batch mode
+prompt-diff --suite examples/suite.json --json --out report.json
 ```
 
 | Flag | What it does · 作用 |
 | --- | --- |
 | `--old`, `--new` | Prompt files. `-` reads stdin (one side only). · 提示词文件；一侧可用 `-` 读 stdin |
+| `--suite <file>` | Process multiple pairs from JSON/YAML file (batch mode) · 从 JSON/YAML 文件批量处理多对提示词 |
+| `--out <file>` | Write report to file (suite mode) · 将报告写入文件（批量模式） |
 | `--json` | Machine-readable JSON · 机器可读输出 |
 | `--tokens` / `--no-tokens` | Show / hide cl100k-ish token estimates (shown by default) · 显示 / 隐藏 token 估算（默认显示） |
 | `--format unified\|split` | Textual diff layout. Default `unified` · 文本 diff 布局，默认 `unified` |
 | `--context <n>` | Unified-diff context lines. Default `3` · unified 上下文行数 |
 | `--ai` | Optional one-paragraph semantic risk · 可选一段语义风险说明 |
-| `--fail-above <n>` | Exit `1` when risk score is `>= n` · 风险分 `>= n` 时退出码 `1` |
+| `--fail-above <n>` | Exit `1` when risk score is `>= n` (suite mode: applies to maxScore) · 风险分 `>= n` 时退出码 `1`（批量模式：应用于 maxScore） |
 | `--github` | Emit GitHub Actions `::notice` / `::warning` / `::error` annotations · 输出 Actions 注解，PR Checks 可见 |
 | `--quiet` | Suppress the pretty terminal report; `--json` / `--github` still emit · 抑制漂亮终端报告；`--json` / `--github` 仍照常输出 |
 | `--max-annotations <n>` | Cap annotation lines with `--github` (default `20`) · 限制 `--github` 注解条数（默认 20） |
@@ -68,6 +72,72 @@ prompt-diff --github --max-annotations 10 old.txt new.txt
 Exit codes: `0` ok · `1` `--fail-above` exceeded · `2` usage / I/O error.
 
 退出码：`0` 正常 · `1` 触发 `--fail-above` · `2` 用法或读写错误。
+
+### Suite / batch mode · 批量模式
+
+Process multiple prompt pairs in one run. Use `--suite <file.json|yml>` with a file containing an array of `{id?, old, new}` objects:
+
+一次处理多对提示词。使用 `--suite <file.json|yml>` 指定包含 `{id?, old, new}` 对象数组的文件：
+
+```bash
+prompt-diff --suite examples/suite.json --json
+prompt-diff --suite examples/suite.json --json --out report.json
+prompt-diff --suite examples/suite.yml --json --fail-above 50
+```
+
+**File format · 文件格式:**
+
+```json
+[
+  {
+    "id": "v1-to-v2",
+    "old": "prompts/v1.txt",
+    "new": "prompts/v2.txt"
+  },
+  {
+    "id": "safety-check",
+    "old": "old.txt",
+    "new": "new.txt"
+  }
+]
+```
+
+YAML is also supported (`.yml` / `.yaml`). The `id` field is optional; auto-generated if missing.
+
+也支持 YAML（`.yml` / `.yaml`）。`id` 字段可选，缺省时自动生成。
+
+**Output · 输出:**
+
+With `--json`, emits aggregated report:
+
+使用 `--json` 输出汇总报告：
+
+```json
+{
+  "pairs": [
+    { "id": "v1-to-v2", "old": "...", "new": "...", "result": { ... } },
+    { "id": "safety-check", "old": "...", "new": "...", "result": { ... } }
+  ],
+  "stats": {
+    "count": 2,
+    "maxScore": 52,
+    "avgScore": 38,
+    "failed": 0
+  }
+}
+```
+
+**`--fail-above` behavior · 行为:**
+
+In suite mode, `--fail-above` applies to `stats.maxScore` (the highest risk score across all pairs). Exit code `1` if `maxScore >= threshold`.
+
+批量模式下，`--fail-above` 应用于 `stats.maxScore`（所有对中的最高风险分）。若 `maxScore >= 阈值` 则退出码 `1`。
+
+**`--out <file>` option · 选项:**
+
+Write the JSON report to disk. Useful for CI artifacts or downstream tools.
+
+将 JSON 报告写入磁盘，适用于 CI 产物或下游工具。
 
 Bundled fixtures: [`prompts/v1.txt`](prompts/v1.txt) · [`prompts/v2.txt`](prompts/v2.txt) — shipped in the npm package (verify with `npm pack`).
 
