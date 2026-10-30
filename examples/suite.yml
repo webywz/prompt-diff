@@ -1,0 +1,7 @@
+- id: v1-to-v2
+  old: prompts/v1.txt
+  new: prompts/v2.txt
+
+- id: identical-check
+  old: prompts/v1.txt
+  new: prompts/v1.txt

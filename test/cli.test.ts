@@ -265,10 +265,87 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.5");
+    assert.equal(pkg.version, "0.1.6");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
     assert.match(example, /findings/);
+  });
+
+  describe("suite / batch mode", () => {
+    it("processes suite from JSON file with --suite --json", () => {
+      const result = run(["--suite", "examples/suite.json", "--json"]);
+      assert.equal(result.status, 0, result.stderr);
+      const payload = JSON.parse(result.stdout);
+      assert.ok(payload.pairs);
+      assert.ok(Array.isArray(payload.pairs));
+      assert.ok(payload.pairs.length >= 2);
+      assert.ok(payload.stats);
+      assert.equal(typeof payload.stats.count, "number");
+      assert.equal(typeof payload.stats.maxScore, "number");
+      assert.equal(typeof payload.stats.avgScore, "number");
+    });
+
+    it("processes suite from YAML file", () => {
+      const result = run(["--suite", "examples/suite.yml", "--json"]);
+      assert.equal(result.status, 0, result.stderr);
+      const payload = JSON.parse(result.stdout);
+      assert.ok(payload.pairs);
+      assert.ok(Array.isArray(payload.pairs));
+      assert.equal(payload.pairs.length, 2);
+    });
+
+    it("writes suite report to --out file", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-suite-out-"));
+      const outFile = join(dir, "report.json");
+      try {
+        const result = run(["--suite", "examples/suite.json", "--json", "--out", outFile]);
+        assert.equal(result.status, 0, result.stderr);
+        const written = readFileSync(outFile, "utf8");
+        const payload = JSON.parse(written);
+        assert.ok(payload.pairs);
+        assert.ok(payload.stats);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("exits 1 when suite maxScore exceeds --fail-above", () => {
+      const result = run(["--suite", "examples/suite.json", "--json", "--fail-above", "5"]);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /suite maxScore \d+ >= 5/);
+    });
+
+    it("includes pair results in suite output", () => {
+      const result = run(["--suite", "examples/suite.json", "--json"]);
+      assert.equal(result.status, 0, result.stderr);
+      const payload = JSON.parse(result.stdout);
+      const pair = payload.pairs[0];
+      assert.ok(pair.id);
+      assert.ok(pair.old);
+      assert.ok(pair.new);
+      assert.ok(pair.result);
+      assert.equal(typeof pair.result.risk.score, "number");
+    });
+
+    it("documents --suite in help", () => {
+      const result = run(["--help"]);
+      assert.equal(result.status, 0);
+      assert.match(result.stdout, /--suite/);
+      assert.match(result.stdout, /batch mode/i);
+    });
+
+    it("rejects invalid suite file extension", () => {
+      const dir = mkdtempSync(join(tmpdir(), "prompt-diff-suite-"));
+      const invalidFile = join(dir, "invalid.txt");
+      try {
+        writeFileSync(invalidFile, "test");
+        const result = run(["--suite", invalidFile, "--json"]);
+        assert.equal(result.status, 2);
+        assert.match(result.stderr, /suite file must be \.json, \.yml, or \.yaml/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
