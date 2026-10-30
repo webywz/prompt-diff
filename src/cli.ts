@@ -27,7 +27,7 @@ Options:
   --old <file>             Old prompt (use - for stdin)
   --new <file>             New prompt (use - for stdin)
   --suite <file>           Process multiple pairs from JSON/YAML file
-  --out <file>             Write report to file (suite mode)
+  --out <file>             Write report to file
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --github still emit)
@@ -242,28 +242,59 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
-  if (values.json) {
-    process.stdout.write(
-      `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
-    );
-  } else if (!values.quiet) {
-    if (values.github) {
-      process.stdout.write("::group::prompt-diff report\n");
+  // Write to file when --out is set
+  if (values.out) {
+    const outputContent = values.json
+      ? `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`
+      : formatHuman(result, oldText, newText, {
+          color: false,
+          tokens: showTokens,
+          format,
+          oldLabel: paths.old,
+          newLabel: paths.new,
+          columns: 80,
+          semanticRisk,
+          locale,
+        });
+    
+    try {
+      await writeFile(values.out, outputContent, "utf8");
+      if (!values.quiet) {
+        process.stderr.write(`prompt-diff: wrote report to ${values.out}\n`);
+      }
+    } catch (err) {
+      process.stderr.write(
+        `prompt-diff: failed to write ${values.out}: ${err instanceof Error ? err.message : err}\n`,
+      );
+      return 2;
     }
-    process.stdout.write(
-      formatHuman(result, oldText, newText, {
-        color,
-        tokens: showTokens,
-        format,
-        oldLabel: paths.old,
-        newLabel: paths.new,
-        columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
-        semanticRisk,
-        locale,
-      }),
-    );
-    if (values.github) {
-      process.stdout.write("::endgroup::\n");
+  }
+
+  // Write to stdout
+  if (values.json || !values.out) {
+    if (values.json) {
+      process.stdout.write(
+        `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`,
+      );
+    } else if (!values.quiet) {
+      if (values.github) {
+        process.stdout.write("::group::prompt-diff report\n");
+      }
+      process.stdout.write(
+        formatHuman(result, oldText, newText, {
+          color,
+          tokens: showTokens,
+          format,
+          oldLabel: paths.old,
+          newLabel: paths.new,
+          columns: process.stdout.columns && process.stdout.columns > 40 ? process.stdout.columns : 80,
+          semanticRisk,
+          locale,
+        }),
+      );
+      if (values.github) {
+        process.stdout.write("::endgroup::\n");
+      }
     }
   }
 
