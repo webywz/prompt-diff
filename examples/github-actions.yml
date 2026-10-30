@@ -1,8 +1,8 @@
-# Example: surface prompt regressions as PR annotations.
+# Example: surface prompt regressions as PR annotations + job summary.
 # Copy into your app repo as .github/workflows/prompt-diff.yml
 # and point OLD/NEW at the prompts you actually ship.
 #
-# 示例：把 prompt 回归做成 PR 注解。
+# 示例：把 prompt 回归做成 PR 注解 + Job Summary。
 # 复制到业务仓的 .github/workflows/prompt-diff.yml，改 OLD/NEW 路径即可。
 
 name: Prompt regression
@@ -26,15 +26,21 @@ jobs:
       - name: Diff prompts (annotations + CI gate)
         id: diff
         run: |
-          npx --yes @webywz/prompt-diff@^0.1.2 \
+          npx --yes @webywz/prompt-diff@^0.1.3 \
             --github \
             --fail-above 45 \
+            --max-annotations 20 \
             prompts/v1.txt \
             prompts/v2.txt
-        # --github  → ::notice / ::warning / ::error on the PR Checks UI
-        # --fail-above → exit 1 when risk score crosses the gate
+        # --github           → ::notice / ::warning / ::error on the PR Checks UI
+        # --fail-above       → exit 1 when risk score crosses the gate
+        # --max-annotations  → soft-cap annotation noise (default 20)
         # When GITHUB_OUTPUT is set, also writes: score, level, identical, tokens_delta
+        # When GITHUB_STEP_SUMMARY is set, appends a short Markdown job summary
 
       # Optional: use job outputs from a composite / later step
       # - name: Echo score
       #   run: echo "risk ${{ steps.diff.outputs.score }} (${{ steps.diff.outputs.level }})"
+
+      # Optional: Job Summary is written automatically when GITHUB_STEP_SUMMARY is set
+      # (Actions injects it). No extra step required.

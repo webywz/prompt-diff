@@ -170,3 +170,48 @@ export function appendGitHubJobOutput(result: PromptDiffResult): void {
   ].join("\n");
   appendFileSync(path, `${body}\n`, "utf8");
 }
+
+/** Build a short Markdown Job Summary for Actions (no env I/O). */
+export function formatGitHubStepSummary(result: PromptDiffResult): string {
+  const lines: string[] = [
+    "## prompt-diff",
+    "",
+    `| | |`,
+    `| --- | --- |`,
+    `| **Risk** | ${result.risk.score}/100 (\`${result.risk.level}\`) |`,
+    `| **Identical** | ${result.identical} |`,
+    `| **Token Δ** | ${sign(result.stats.delta.tokens)} |`,
+    `| **Chars Δ** | ${sign(result.stats.delta.chars)} (${sign(result.stats.delta.percent)}%) |`,
+    "",
+  ];
+
+  if (result.identical) {
+    lines.push("_Prompts are identical — no findings._", "");
+    return lines.join("\n");
+  }
+
+  const findings: string[] = [];
+  for (const f of result.risk.factors.slice(0, 5)) {
+    findings.push(`- **${f.id}** (+${f.impact}): ${f.detail}`);
+  }
+  for (const item of result.summary.removed.slice(0, 3)) {
+    findings.push(`- removed: ${item}`);
+  }
+  for (const item of result.summary.added.slice(0, 3)) {
+    findings.push(`- added: ${item}`);
+  }
+  if (findings.length > 0) {
+    lines.push("### Key findings", "", ...findings.slice(0, 8), "");
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Append a concise Job Summary when running inside Actions (`GITHUB_STEP_SUMMARY`).
+ * No-op when the env var is unset.
+ */
+export function appendGitHubStepSummary(result: PromptDiffResult): void {
+  const path = process.env.GITHUB_STEP_SUMMARY;
+  if (!path) return;
+  appendFileSync(path, `${formatGitHubStepSummary(result)}\n`, "utf8");
+}
