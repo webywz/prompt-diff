@@ -44,6 +44,8 @@ prompt-diff --old a.md --new b.md
 prompt-diff old.txt -                 # new prompt from stdin
 prompt-diff --json old.txt new.txt
 prompt-diff old.txt new.txt --html                     # self-contained HTML on stdout
+prompt-diff old.txt new.txt --html --theme fog
+prompt-diff old.txt new.txt --html report.html --theme midnight
 prompt-diff old.txt new.txt --html report.html         # write HTML file (creates parent dirs)
 prompt-diff --out report.txt old.txt new.txt           # write pretty report to file
 prompt-diff --out report.json --json old.txt new.txt   # write JSON to file
@@ -63,6 +65,7 @@ prompt-diff --suite examples/suite.json --json --out report.json
 | `--suite <file>` | Process multiple pairs from JSON/YAML file (batch mode) · 从 JSON/YAML 文件批量处理多对提示词 |
 | `--out <file>` | Write report to file · 将报告写入文件 |
 | `--html [path]` | Self-contained offline HTML report. Omit path → stdout; give path → write file (creates parent dirs). Mutually exclusive with `--json`. · 自包含离线 HTML 报告。省略路径输出到 stdout；给出路径则写文件（自动创建父目录）。与 `--json` 互斥 |
+| `--theme <name>` | HTML palette only: `ember` (default, 0.1.9 look), `fog`, `midnight`, `paper` · 仅 HTML 配色：`ember`（默认，与 0.1.9 相同）、`fog`、`midnight`、`paper` |
 | `--json` | Machine-readable JSON · 机器可读输出 |
 | `--tokens` / `--no-tokens` | Show / hide cl100k-ish token estimates (shown by default) · 显示 / 隐藏 token 估算（默认显示） |
 | `--format unified\|split` | Textual diff layout. Default `unified` · 文本 diff 布局，默认 `unified` |
@@ -90,6 +93,7 @@ Process multiple prompt pairs in one run. Use `--suite <file.json|yml>` with a f
 prompt-diff --suite examples/suite.json --json
 prompt-diff --suite examples/suite.json --json --out report.json
 prompt-diff --suite examples/suite.json --html
+prompt-diff --suite examples/suite.json --html --theme paper
 prompt-diff --suite examples/suite.json --html suite.html
 prompt-diff --suite examples/suite.yml --json --fail-above 50
 ```
@@ -161,9 +165,9 @@ Copy-paste workflow: [`examples/github-actions.yml`](examples/github-actions.yml
 
 可直接复制的 workflow：[`examples/github-actions.yml`](examples/github-actions.yml)。
 
-`--github` prints workflow commands (`::warning file=…::…`) so Checks / Files changed show intent, token, and regression findings. With `GITHUB_OUTPUT` set it also writes `score`, `level`, `identical`, `tokens_delta`, `findings` (`findings` = `risk.factors.length`). With `GITHUB_STEP_SUMMARY` set it appends a short Markdown job summary (risk / identical / token Δ / key findings). Use `--max-annotations <n>` to soft-cap PR noise (default 20). `--quiet` suppresses the pretty terminal report only (`--json` / `--github` annotations, summary, and outputs still emit). Combine with `--json` or `--html` (stdout) and annotations go to stderr so stdout stays parseable. `--html` and `--json` cannot share stdout.
+`--github` prints workflow commands (`::warning file=…::…`) so Checks / Files changed show intent, token, and regression findings. With `GITHUB_OUTPUT` set it also writes `score`, `level`, `identical`, `tokens_delta`, `findings` (`findings` = `risk.factors.length`). With `GITHUB_STEP_SUMMARY` set it appends a short Markdown job summary (risk / identical / token Δ / key findings). Use `--max-annotations <n>` to soft-cap PR noise (default 20). `--quiet` suppresses the pretty terminal report only (`--json` / `--github` annotations, summary, and outputs still emit). Combine with `--json` or `--html` (stdout) and annotations go to stderr so stdout stays parseable. `--html` and `--json` cannot share stdout. `--theme` only restyles `--html`.
 
-`--github` 输出 workflow 命令，PR Checks / Files 里能直接看到意图、token、回归风险。在 Actions 里还会写 `GITHUB_OUTPUT`（`score` / `level` / `identical` / `tokens_delta` / `findings`，其中 `findings` = `risk.factors.length`），有 `GITHUB_STEP_SUMMARY` 时再追加一段简洁 Job Summary。`--max-annotations <n>` 可限制注解条数（默认 20）。`--quiet` 只抑制漂亮终端报告（`--json` / `--github` 注解、summary、outputs 仍照常）。与 `--json` 或 `--html`（stdout）联用时注解走 stderr，stdout 仍是干净 JSON / HTML。`--html` 与 `--json` 不能同时占用 stdout，二选一。
+`--github` 输出 workflow 命令，PR Checks / Files 里能直接看到意图、token、回归风险。在 Actions 里还会写 `GITHUB_OUTPUT`（`score` / `level` / `identical` / `tokens_delta` / `findings`，其中 `findings` = `risk.factors.length`），有 `GITHUB_STEP_SUMMARY` 时再追加一段简洁 Job Summary。`--max-annotations <n>` 可限制注解条数（默认 20）。`--quiet` 只抑制漂亮终端报告（`--json` / `--github` 注解、summary、outputs 仍照常）。与 `--json` 或 `--html`（stdout）联用时注解走 stderr，stdout 仍是干净 JSON / HTML。`--html` 与 `--json` 不能同时占用 stdout，二选一。`--theme` 只改 `--html` 配色。
 
 ### Library · 库
 
@@ -200,8 +204,8 @@ console.log(estimateTokens(newPrompt));
   **CI 门禁** — `--fail-above` 把 prompt 回归拦在流水线里。
 - **GitHub annotations** — `--github` emits Actions notices/warnings/errors for PR UI; optional Job Summary + `--max-annotations`; `--quiet` for annotations-only CI logs.
   **GitHub 注解** — `--github` 输出 Actions notice/warning/error；可选 Job Summary 与 `--max-annotations`；`--quiet` 只留注解不打漂亮报告。
-- **Offline HTML report** — `--html [path]` writes a self-contained page (inline CSS, no CDN) with pair/suite summary, risk, intent, tokens, and diff highlights.
-  **离线 HTML 报告** — `--html [path]` 写出自包含页面（内联 CSS，无 CDN）：单对 / 批量摘要、风险、意图、token、diff 高亮。
+- **Offline HTML report** — `--html [path]` writes a self-contained page (inline CSS, no CDN) with pair/suite summary, risk, intent, tokens, and diff highlights. `--theme <name>` swaps CSS-variable palettes (`ember` default = 0.1.9 look, plus `fog`, `midnight`, `paper`); it does not change JSON, pretty, GitHub annotations, or scoring.
+  **离线 HTML 报告** — `--html [path]` 写出自包含页面（内联 CSS，无 CDN）：单对 / 批量摘要、风险、意图、token、diff 高亮。`--theme <name>` 只换 CSS 变量配色（默认 `ember` 与 0.1.9 相同，另有 `fog` / `midnight` / `paper`）；不影响 JSON、终端漂亮输出、GitHub 注解或打分。
 - **Optional `--ai`** — one semantic paragraph when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set; without a key, heuristics still run.
   **可选 `--ai`** — 有 OpenAI / Anthropic Key 时多一段语义说明；没 Key 仍出本地结果。
 

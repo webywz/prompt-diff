@@ -4,8 +4,9 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { diffPrompts } from "../src/diffPrompts.js";
-import { escapeHtml, formatHtml, formatSuiteHtml } from "../src/html.js";
+import { escapeHtml, formatHtml, formatSuiteHtml, THEME_TOKENS } from "../src/html.js";
 import { processSuite } from "../src/suite.js";
+import { HTML_THEMES } from "../src/types.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CDN = /cdn\.|unpkg|jsdelivr|fonts\.googleapis|https?:\/\//i;
@@ -68,6 +69,46 @@ describe("escapeHtml / formatHtml", () => {
     assert.doesNotMatch(html, /Risk score/);
   });
 
+  it("default theme is identical to ember", () => {
+    const result = diffPrompts("a\n", "b\n");
+    const omitted = formatHtml(result, { oldLabel: "old.txt", newLabel: "new.txt" });
+    const ember = formatHtml(result, {
+      oldLabel: "old.txt",
+      newLabel: "new.txt",
+      theme: "ember",
+    });
+    assert.equal(omitted, ember);
+    assert.match(ember, /--bg: #1a1b26/);
+    assert.match(ember, /--text: #c0caf5/);
+    assert.match(ember, /--purple: #bb9af7/);
+    assert.doesNotMatch(ember, /--bar-track:/);
+    assert.doesNotMatch(ember, /var\(--hot-border\)/);
+  });
+
+  it("each theme emits distinct CSS tokens", () => {
+    const result = diffPrompts("a\n", "b\n");
+    const htmlByTheme = Object.fromEntries(
+      HTML_THEMES.map((name) => [
+        name,
+        formatHtml(result, { oldLabel: "old.txt", newLabel: "new.txt", theme: name }),
+      ]),
+    ) as Record<(typeof HTML_THEMES)[number], string>;
+    for (const name of HTML_THEMES) {
+      const tokens = THEME_TOKENS[name];
+      assert.match(htmlByTheme[name], new RegExp(`--bg: ${tokens["--bg"]}`));
+      assert.match(htmlByTheme[name], new RegExp(`--text: ${tokens["--text"]}`));
+      assert.match(htmlByTheme[name], new RegExp(`--panel: ${tokens["--panel"]}`));
+    }
+    const backgrounds = HTML_THEMES.map((name) => THEME_TOKENS[name]["--bg"]);
+    assert.equal(new Set(backgrounds).size, HTML_THEMES.length);
+    assert.notEqual(htmlByTheme.fog, htmlByTheme.ember);
+    assert.notEqual(htmlByTheme.midnight, htmlByTheme.ember);
+    assert.notEqual(htmlByTheme.paper, htmlByTheme.ember);
+    assert.match(htmlByTheme.fog, /var\(--hot-border\)/);
+    assert.match(htmlByTheme.midnight, /var\(--bar-track\)/);
+    assert.match(htmlByTheme.paper, /var\(--text-soft\)/);
+  });
+
   it("renders suite summary and per-pair cards", async () => {
     const report = await processSuite([
       { id: "v1-to-v2", old: "prompts/v1.txt", new: "prompts/v2.txt" },
@@ -80,5 +121,20 @@ describe("escapeHtml / formatHtml", () => {
     assert.match(html, /same/);
     assert.match(html, new RegExp(`${report.stats.maxScore}/100`));
     assert.doesNotMatch(html, CDN);
+  });
+
+  it("suite default theme is identical to ember and fog is distinct", async () => {
+    const report = await processSuite([
+      { id: "same", old: "prompts/v1.txt", new: "prompts/v1.txt" },
+    ]);
+    const omitted = formatSuiteHtml(report);
+    const ember = formatSuiteHtml(report, { theme: "ember" });
+    const fog = formatSuiteHtml(report, { theme: "fog" });
+    assert.equal(omitted, ember);
+    assert.match(ember, /--bg: #1a1b26/);
+    assert.notEqual(fog, ember);
+    assert.match(fog, /--bg: #e8eef4/);
+    assert.doesNotMatch(ember, CDN);
+    assert.doesNotMatch(fog, CDN);
   });
 });

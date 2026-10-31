@@ -13,7 +13,7 @@ import {
 import { formatHtml, formatSuiteHtml } from "./html.js";
 import { readSource, readSuiteFile, resolvePromptPaths, UsageError } from "./io.js";
 import { processSuite } from "./suite.js";
-import type { Locale } from "./types.js";
+import { DEFAULT_HTML_THEME, HTML_THEMES, isHtmlTheme, type HtmlTheme, type Locale } from "./types.js";
 import { packageVersion } from "./version.js";
 
 const HELP = `prompt-diff — diff two LLM prompts like code
@@ -24,6 +24,7 @@ Usage:
   prompt-diff old.txt -                 # new prompt from stdin
   prompt-diff --json old.txt new.txt
   prompt-diff old.txt new.txt --html
+  prompt-diff old.txt new.txt --html --theme fog
   prompt-diff old.txt new.txt --html report.html
   prompt-diff --github old.txt new.txt  # GitHub Actions annotations
   prompt-diff --suite examples/suite.json --json  # batch mode
@@ -34,6 +35,7 @@ Options:
   --suite <file>           Process multiple pairs from JSON/YAML file
   --out <file>             Write report to file
   --html [path]            Self-contained HTML report (stdout, or write to path; offline, no CDN)
+  --theme <name>           HTML palette: ember (default), fog, midnight, paper
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --html / --github still emit)
@@ -61,6 +63,7 @@ score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is se
 (findings = risk.factors.length). A short Markdown job summary is appended when
 GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
 --html and --json cannot share stdout; pick one primary export.
+--theme only restyles --html (ember = 0.1.9 look). Pretty / JSON / GitHub / scoring unchanged.
 
 Suite mode (--suite <file.json|yml>): process multiple prompt pairs from a file.
 File format: array of {id?, old, new}. With --json, outputs aggregated report
@@ -85,6 +88,8 @@ interface CliValues {
   out?: string;
   /** `true` = HTML on stdout; string = write that path. */
   html?: string | true;
+  /** HTML report palette only; ignored by pretty / JSON / GitHub. */
+  theme?: string;
   json: boolean;
   github: boolean;
   quiet: boolean;
@@ -137,6 +142,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         new: { type: "string" },
         suite: { type: "string" },
         out: { type: "string" },
+        theme: { type: "string" },
         json: { type: "boolean", default: false },
         github: { type: "boolean", default: false },
         quiet: { type: "boolean", default: false },
@@ -157,7 +163,11 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
     });
     return { values: { ...(values as CliValues), html: peeled.html }, positionals };
   } catch (err) {
-    failUsage(err instanceof Error ? err.message : String(err));
+    const message = err instanceof Error ? err.message : String(err);
+    if (/--theme/.test(message)) {
+      failUsage(`--theme must be one of: ${HTML_THEMES.join(", ")}`);
+    }
+    failUsage(message);
   }
 }
 
@@ -165,6 +175,14 @@ function resolveLocale(raw: string | undefined): Locale {
   if (raw === undefined) return "en";
   if (raw !== "en" && raw !== "zh") {
     failUsage(`--locale must be en or zh (got ${raw})`);
+  }
+  return raw;
+}
+
+function resolveTheme(raw: string | undefined): HtmlTheme {
+  if (raw === undefined) return DEFAULT_HTML_THEME;
+  if (raw === "" || !isHtmlTheme(raw)) {
+    failUsage(`--theme must be one of: ${HTML_THEMES.join(", ")}`);
   }
   return raw;
 }
@@ -202,9 +220,11 @@ async function main(argv: string[]): Promise<number> {
     failUsage("--html cannot be combined with --json (choose one primary export)");
   }
 
+  const theme = resolveTheme(values.theme);
+
   // Suite mode
   if (values.suite) {
-    return await runSuiteMode(values);
+    return await runSuiteMode(values, theme);
   }
 
   // Single-pair mode (existing logic)
@@ -340,6 +360,7 @@ async function main(argv: string[]): Promise<number> {
           newLabel: paths.new,
           semanticRisk: semanticRisk ?? null,
           tokens: showTokens,
+          theme,
         })
       : undefined;
 
@@ -385,7 +406,7 @@ async function main(argv: string[]): Promise<number> {
   return 0;
 }
 
-async function runSuiteMode(values: CliValues): Promise<number> {
+async function runSuiteMode(values: CliValues, theme: HtmlTheme): Promise<number> {
   if (!values.suite) {
     throw new Error("Suite file is required");
   }
@@ -420,7 +441,9 @@ async function runSuiteMode(values: CliValues): Promise<number> {
 
   const output = JSON.stringify(report, null, 2);
   const html =
-    values.html !== undefined ? formatSuiteHtml(report, { locale, tokens: showTokens }) : undefined;
+    values.html !== undefined
+      ? formatSuiteHtml(report, { locale, tokens: showTokens, theme })
+      : undefined;
 
   if (values.out) {
     try {
