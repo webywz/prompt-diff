@@ -2,7 +2,7 @@ export { analyzeStructure, measure } from "./analyze.js";
 export { detectAiProvider, semanticRiskParagraph } from "./ai.js";
 export { diffPrompts } from "./diffPrompts.js";
 export { formatHuman, formatJson } from "./format.js";
-export { escapeHtml, formatHtml, formatSuiteHtml } from "./html.js";
+export { escapeHtml, formatHtml, formatSuiteHtml, THEME_TOKENS } from "./html.js";
 export type { HtmlFormatOptions, SuiteHtmlFormatOptions } from "./html.js";
 export {
   annotation,
@@ -16,8 +16,10 @@ export {
 export type { GitHubFormatOptions } from "./github.js";
 export { riskLevel, scoreRisk } from "./risk.js";
 export { estimateTokens } from "./tokenize.js";
+export { DEFAULT_HTML_THEME, HTML_THEMES, isHtmlTheme } from "./types.js";
 export type {
   DiffPromptsOptions,
+  HtmlTheme,
   JsonPayload,
   PromptDiffResult,
   PromptStats,

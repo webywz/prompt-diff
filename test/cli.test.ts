@@ -265,7 +265,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.9");
+    assert.equal(pkg.version, "0.1.10");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
@@ -479,12 +479,17 @@ describe("prompt-diff CLI", () => {
   describe("--html report", () => {
     const CDN = /cdn\.|unpkg|jsdelivr|fonts\.googleapis/i;
 
-    it("documents --html [path] in help", () => {
+    it("documents --html [path] and --theme in help", () => {
       const result = run(["--help"]);
       assert.equal(result.status, 0);
       assert.match(result.stdout, /--html \[path\]/);
       assert.match(result.stdout, /Self-contained HTML report/);
       assert.match(result.stdout, /--html and --json cannot share stdout/);
+      assert.match(result.stdout, /--theme <name>/);
+      assert.match(result.stdout, /ember/);
+      assert.match(result.stdout, /fog/);
+      assert.match(result.stdout, /midnight/);
+      assert.match(result.stdout, /paper/);
     });
 
     it("prints HTML to stdout when path is omitted", () => {
@@ -592,6 +597,102 @@ describe("prompt-diff CLI", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    });
+
+    it("omitting --theme matches --theme ember", () => {
+      const omitted = run(["prompts/v1.txt", "prompts/v2.txt", "--html"]);
+      const ember = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "ember"]);
+      assert.equal(omitted.status, 0, omitted.stderr);
+      assert.equal(ember.status, 0, ember.stderr);
+      assert.equal(omitted.stdout, ember.stdout);
+      assert.match(ember.stdout, /--bg: #1a1b26/);
+      assert.doesNotMatch(ember.stdout, /--bar-track:/);
+    });
+
+    it("applies fog / midnight / paper palettes on --html", () => {
+      const fog = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "fog"]);
+      const midnight = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "midnight"]);
+      const paper = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "paper"]);
+      assert.equal(fog.status, 0, fog.stderr);
+      assert.equal(midnight.status, 0, midnight.stderr);
+      assert.equal(paper.status, 0, paper.stderr);
+      assert.match(fog.stdout, /--bg: #e8eef4/);
+      assert.match(midnight.stdout, /--bg: #0b0d14/);
+      assert.match(paper.stdout, /--bg: #f6f0e4/);
+      assert.doesNotMatch(fog.stdout, /--bg: #1a1b26/);
+      assert.doesNotMatch(midnight.stdout, /--bg: #1a1b26/);
+      assert.notEqual(fog.stdout, midnight.stdout);
+      assert.notEqual(paper.stdout, fog.stdout);
+    });
+
+    it("rejects an unknown --theme with UsageError", () => {
+      const result = run(["--html", "--theme", "solarized", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /must be one of: ember, fog, midnight, paper/);
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("rejects a missing --theme value", () => {
+      const result = run(["--html", "--theme"]);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /ember, fog, midnight, paper/);
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("keeps zh labels with --html --locale zh --theme paper", () => {
+      const result = run([
+        "--html",
+        "--theme",
+        "paper",
+        "--locale",
+        "zh",
+        "prompts/v1.txt",
+        "prompts/v2.txt",
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /风险分/);
+      assert.match(result.stdout, /lang="zh"/);
+      assert.match(result.stdout, /--bg: #f6f0e4/);
+    });
+
+    it("does not restyle --json / pretty when --theme is set without --html", () => {
+      const json = run(["--json", "--theme", "fog", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(json.status, 0, json.stderr);
+      const payload = JSON.parse(json.stdout) as JsonPayload;
+      assert.equal(typeof payload.risk.score, "number");
+      assert.doesNotMatch(json.stdout, /<!DOCTYPE html>/i);
+      assert.doesNotMatch(json.stdout, /--bg:/);
+      const pretty = run(["--theme", "midnight", "prompts/v1.txt", "prompts/v2.txt"]);
+      assert.equal(pretty.status, 0, pretty.stderr);
+      assert.match(pretty.stdout, /Risk/);
+      assert.doesNotMatch(pretty.stdout, /<!DOCTYPE html>/i);
+    });
+
+    it("keeps --html --theme with --github / --quiet", () => {
+      const result = run([
+        "--html",
+        "--theme",
+        "midnight",
+        "--github",
+        "--quiet",
+        "prompts/v1.txt",
+        "prompts/v2.txt",
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.match(result.stdout, /--bg: #0b0d14/);
+      assert.doesNotMatch(result.stdout, /::(error|warning|notice) /);
+      assert.match(result.stderr, /::(error|warning|notice) /);
+      assert.doesNotMatch(result.stdout, /::group::/);
+    });
+
+    it("applies --theme to suite --html", () => {
+      const result = run(["--suite", "examples/suite.json", "--html", "--theme", "fog"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /<!DOCTYPE html>/i);
+      assert.match(result.stdout, /Suite/);
+      assert.match(result.stdout, /v1-to-v2/);
+      assert.match(result.stdout, /--bg: #e8eef4/);
     });
   });
 });

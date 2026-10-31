@@ -115,3 +115,12 @@ export interface SuiteReport {
   pairs: SuitePairResult[];
   stats: SuiteStats;
 }
+
+/** Offline HTML report palettes (`--theme`). `ember` is the 0.1.9 default look. */
+export const HTML_THEMES = ["ember", "fog", "midnight", "paper"] as const;
+export type HtmlTheme = (typeof HTML_THEMES)[number];
+export const DEFAULT_HTML_THEME: HtmlTheme = "ember";
+
+export function isHtmlTheme(name: string): name is HtmlTheme {
+  return (HTML_THEMES as readonly string[]).includes(name);
+}
