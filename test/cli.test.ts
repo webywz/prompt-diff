@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { JsonPayload } from "../src/types.js";
+import { HTML_THEMES, type JsonPayload } from "../src/types.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const tsx = join(root, "node_modules/.bin/tsx");
@@ -67,6 +67,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(result.status, 0);
     assert.match(result.stdout, /prompt-diff — diff two LLM prompts like code/);
     assert.match(result.stdout, /--json/);
+    assert.match(result.stdout, /--list-themes/);
   });
 
   it("diffs two files with a human summary", () => {
@@ -280,7 +281,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.12");
+    assert.equal(pkg.version, "0.1.13");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
@@ -506,6 +507,33 @@ describe("prompt-diff CLI", () => {
       assert.match(result.stdout, /midnight/);
       assert.match(result.stdout, /paper/);
       assert.match(result.stdout, /aurora/);
+      assert.match(result.stdout, /--list-themes/);
+      assert.match(result.stdout, /JSON array/);
+    });
+
+    it("prints HTML_THEMES names one per line with --list-themes", () => {
+      const result = run(["--list-themes"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, `${HTML_THEMES.join("\n")}\n`);
+      assert.deepEqual(result.stdout.trim().split("\n"), [...HTML_THEMES]);
+    });
+
+    it("prints a JSON array of HTML_THEMES with --list-themes --json", () => {
+      const listed = run(["--list-themes", "--json"]);
+      const reversed = run(["--json", "--list-themes"]);
+      assert.equal(listed.status, 0, listed.stderr);
+      assert.equal(reversed.status, 0, reversed.stderr);
+      assert.deepEqual(JSON.parse(listed.stdout), [...HTML_THEMES]);
+      assert.deepEqual(JSON.parse(reversed.stdout), [...HTML_THEMES]);
+      assert.equal(listed.stdout, `${JSON.stringify([...HTML_THEMES])}\n`);
+    });
+
+    it("does not require diff inputs for --list-themes", () => {
+      const result = run(["--list-themes"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stderr, /unknown option|UsageError|expected/i);
+      assert.doesNotMatch(result.stdout, /Risk/);
+      assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
     });
 
     it("prints HTML to stdout when path is omitted", () => {

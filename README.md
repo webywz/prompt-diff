@@ -47,6 +47,8 @@ prompt-diff old.txt new.txt --html                     # self-contained HTML on 
 prompt-diff old.txt new.txt --html --theme fog
 prompt-diff old.txt new.txt --html report.html --theme midnight
 prompt-diff old.txt new.txt --html --theme aurora
+prompt-diff --list-themes
+prompt-diff --list-themes --json
 prompt-diff old.txt new.txt --html report.html         # write HTML file (creates parent dirs)
 prompt-diff --out report.txt old.txt new.txt           # write pretty report to file
 prompt-diff --out report.json --json old.txt new.txt   # write JSON to file
@@ -68,6 +70,7 @@ prompt-diff --copy old.txt new.txt             # pretty report → clipboard
 | `--out <file>` | Write report to file · 将报告写入文件 |
 | `--html [path]` | Self-contained offline HTML report. Omit path → stdout; give path → write file (creates parent dirs). Mutually exclusive with `--json`. · 自包含离线 HTML 报告。省略路径输出到 stdout；给出路径则写文件（自动创建父目录）。与 `--json` 互斥 |
 | `--theme <name>` | HTML palette only: `ember` (default, 0.1.9 look), `fog`, `midnight`, `paper`, `aurora` · 仅 HTML 配色：`ember`（默认，与 0.1.9 相同）、`fog`、`midnight`、`paper`、`aurora` |
+| `--list-themes` | Print available HTML theme names (one per line; `--json`: JSON array) · 打印可用 HTML 主题名（每行一个；加 `--json` 则输出 JSON 数组） |
 | `--json` | Machine-readable JSON · 机器可读输出 |
 | `--tokens` / `--no-tokens` | Show / hide cl100k-ish token estimates (shown by default) · 显示 / 隐藏 token 估算（默认显示） |
 | `--format unified\|split` | Textual diff layout. Default `unified` · 文本 diff 布局，默认 `unified` |
@@ -207,8 +210,8 @@ console.log(estimateTokens(newPrompt));
   **CI 门禁** — `--fail-above` 把 prompt 回归拦在流水线里。
 - **GitHub annotations** — `--github` emits Actions notices/warnings/errors for PR UI; optional Job Summary + `--max-annotations`; `--quiet` for annotations-only CI logs.
   **GitHub 注解** — `--github` 输出 Actions notice/warning/error；可选 Job Summary 与 `--max-annotations`；`--quiet` 只留注解不打漂亮报告。
-- **Offline HTML report** — `--html [path]` writes a self-contained page (inline CSS, no CDN) with pair/suite summary, risk, intent, tokens, and diff highlights. `--theme <name>` swaps CSS-variable palettes (`ember` default = 0.1.9 look, plus `fog`, `midnight`, `paper`, `aurora`); it does not change JSON, pretty, GitHub annotations, or scoring.
-  **离线 HTML 报告** — `--html [path]` 写出自包含页面（内联 CSS，无 CDN）：单对 / 批量摘要、风险、意图、token、diff 高亮。`--theme <name>` 只换 CSS 变量配色（默认 `ember` 与 0.1.9 相同，另有 `fog` / `midnight` / `paper` / `aurora`）；不影响 JSON、终端漂亮输出、GitHub 注解或打分。
+- **Offline HTML report** — `--html [path]` writes a self-contained page (inline CSS, no CDN) with pair/suite summary, risk, intent, tokens, and diff highlights. `--theme <name>` swaps CSS-variable palettes (`ember` default = 0.1.9 look, plus `fog`, `midnight`, `paper`, `aurora`); it does not change JSON, pretty, GitHub annotations, or scoring. `--list-themes` prints those names (one per line; `--list-themes --json` is a JSON array).
+  **离线 HTML 报告** — `--html [path]` 写出自包含页面（内联 CSS，无 CDN）：单对 / 批量摘要、风险、意图、token、diff 高亮。`--theme <name>` 只换 CSS 变量配色（默认 `ember` 与 0.1.9 相同，另有 `fog` / `midnight` / `paper` / `aurora`）；不影响 JSON、终端漂亮输出、GitHub 注解或打分。`--list-themes` 打印这些主题名（每行一个；`--list-themes --json` 为 JSON 数组）。
 - **Clipboard** — `--copy` writes the pretty terminal report (not JSON / HTML / GitHub chrome) to the system clipboard. Missing `pbcopy` / `wl-copy` / `xclip` / `xsel` / `clip` → skip silently.
   **剪贴板** — `--copy` 把漂亮终端报告（不是 JSON / HTML / GitHub 装饰）写入系统剪贴板。没有 `pbcopy` / `wl-copy` / `xclip` / `xsel` / `clip` 则静默跳过。
 - **Optional `--ai`** — one semantic paragraph when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set; without a key, heuristics still run.

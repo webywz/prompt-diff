@@ -42,6 +42,8 @@ Usage:
   prompt-diff old.txt new.txt --html
   prompt-diff old.txt new.txt --html --theme fog
   prompt-diff old.txt new.txt --html report.html
+  prompt-diff --list-themes
+  prompt-diff --list-themes --json
   prompt-diff --github old.txt new.txt  # GitHub Actions annotations
   prompt-diff --copy old.txt new.txt    # pretty report → clipboard
   prompt-diff --suite examples/suite.json --json  # batch mode
@@ -53,6 +55,7 @@ Options:
   --out <file>             Write report to file
   --html [path]            Self-contained HTML report (stdout, or write to path; offline, no CDN)
   --theme <name>           HTML palette: ember (default), fog, midnight, paper, aurora
+  --list-themes            Print available HTML theme names (one per line; --json: JSON array)
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --html / --github still emit)
@@ -82,6 +85,7 @@ score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is se
 GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
 --html and --json cannot share stdout; pick one primary export.
 --theme only restyles --html (ember = 0.1.9 look). Pretty / JSON / GitHub / scoring unchanged.
+--list-themes prints HTML palette names (same order as --theme); combine with --json for a JSON array.
 --copy writes the pretty terminal report (not JSON / HTML / GitHub chrome).
 No clipboard tool → skip silently (exit 0 unless something else fails).
 
@@ -110,6 +114,7 @@ interface CliValues {
   html?: string | true;
   /** HTML report palette only; ignored by pretty / JSON / GitHub. */
   theme?: string;
+  "list-themes": boolean;
   json: boolean;
   github: boolean;
   quiet: boolean;
@@ -164,6 +169,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         suite: { type: "string" },
         out: { type: "string" },
         theme: { type: "string" },
+        "list-themes": { type: "boolean", default: false },
         json: { type: "boolean", default: false },
         github: { type: "boolean", default: false },
         quiet: { type: "boolean", default: false },
@@ -235,6 +241,14 @@ export async function main(argv: string[], deps: CliDeps = {}): Promise<number> 
   }
   if (values.version) {
     process.stdout.write(`${packageVersion()}\n`);
+    return 0;
+  }
+  if (values["list-themes"]) {
+    if (values.json) {
+      process.stdout.write(`${JSON.stringify([...HTML_THEMES])}\n`);
+    } else {
+      process.stdout.write(`${HTML_THEMES.join("\n")}\n`);
+    }
     return 0;
   }
 
