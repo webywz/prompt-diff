@@ -57,6 +57,7 @@ prompt-diff --github --quiet old.txt new.txt   # CI: annotations only (no pretty
 prompt-diff --github --max-annotations 10 old.txt new.txt
 prompt-diff --suite examples/suite.json --json  # batch mode
 prompt-diff --suite examples/suite.json --json --out report.json
+prompt-diff --copy old.txt new.txt             # pretty report → clipboard
 ```
 
 | Flag | What it does · 作用 |
@@ -75,6 +76,7 @@ prompt-diff --suite examples/suite.json --json --out report.json
 | `--fail-above <n>` | Exit `1` when risk score is `>= n` (suite mode: applies to maxScore) · 风险分 `>= n` 时退出码 `1`（批量模式：应用于 maxScore） |
 | `--github` | Emit GitHub Actions `::notice` / `::warning` / `::error` annotations · 输出 Actions 注解，PR Checks 可见 |
 | `--quiet` | Suppress the pretty terminal report; `--json` / `--html` / `--github` still emit · 抑制漂亮终端报告；`--json` / `--html` / `--github` 仍照常输出 |
+| `--copy` | Copy the pretty terminal report to the clipboard; skip silently if unavailable · 复制漂亮终端报告到剪贴板；无剪贴板工具则静默跳过 |
 | `--max-annotations <n>` | Cap annotation lines with `--github` (default `20`) · 限制 `--github` 注解条数（默认 20） |
 | `--no-color` | Disable ANSI colors · 关闭颜色 |
 | `-h` / `-v` | Help / version · 帮助 / 版本 |
@@ -206,6 +208,8 @@ console.log(estimateTokens(newPrompt));
   **GitHub 注解** — `--github` 输出 Actions notice/warning/error；可选 Job Summary 与 `--max-annotations`；`--quiet` 只留注解不打漂亮报告。
 - **Offline HTML report** — `--html [path]` writes a self-contained page (inline CSS, no CDN) with pair/suite summary, risk, intent, tokens, and diff highlights. `--theme <name>` swaps CSS-variable palettes (`ember` default = 0.1.9 look, plus `fog`, `midnight`, `paper`); it does not change JSON, pretty, GitHub annotations, or scoring.
   **离线 HTML 报告** — `--html [path]` 写出自包含页面（内联 CSS，无 CDN）：单对 / 批量摘要、风险、意图、token、diff 高亮。`--theme <name>` 只换 CSS 变量配色（默认 `ember` 与 0.1.9 相同，另有 `fog` / `midnight` / `paper`）；不影响 JSON、终端漂亮输出、GitHub 注解或打分。
+- **Clipboard** — `--copy` writes the pretty terminal report (not JSON / HTML / GitHub chrome) to the system clipboard. Missing `pbcopy` / `wl-copy` / `xclip` / `xsel` / `clip` → skip silently.
+  **剪贴板** — `--copy` 把漂亮终端报告（不是 JSON / HTML / GitHub 装饰）写入系统剪贴板。没有 `pbcopy` / `wl-copy` / `xclip` / `xsel` / `clip` 则静默跳过。
 - **Optional `--ai`** — one semantic paragraph when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set; without a key, heuristics still run.
   **可选 `--ai`** — 有 OpenAI / Anthropic Key 时多一段语义说明；没 Key 仍出本地结果。
 
