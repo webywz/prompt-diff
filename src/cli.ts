@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { semanticRiskParagraph } from "./ai.js";
+import { copyToClipboard } from "./clipboard.js";
 import { diffPrompts } from "./diffPrompts.js";
 import { formatHuman, formatJson, shouldColor } from "./format.js";
 import {
@@ -16,6 +19,19 @@ import { processSuite } from "./suite.js";
 import { DEFAULT_HTML_THEME, HTML_THEMES, isHtmlTheme, type HtmlTheme, type Locale } from "./types.js";
 import { packageVersion } from "./version.js";
 
+export type CliDeps = {
+  copyToClipboard?: (text: string) => boolean;
+};
+
+/** Missing clipboard → skip silently. Helpers must not fail the prompt-diff path. */
+function maybeCopyPretty(text: string, copy: (text: string) => boolean): void {
+  try {
+    copy(text);
+  } catch {
+    // Clipboard helpers must not fail the prompt-diff path.
+  }
+}
+
 const HELP = `prompt-diff — diff two LLM prompts like code
 
 Usage:
@@ -27,6 +43,7 @@ Usage:
   prompt-diff old.txt new.txt --html --theme fog
   prompt-diff old.txt new.txt --html report.html
   prompt-diff --github old.txt new.txt  # GitHub Actions annotations
+  prompt-diff --copy old.txt new.txt    # pretty report → clipboard
   prompt-diff --suite examples/suite.json --json  # batch mode
 
 Options:
@@ -39,6 +56,7 @@ Options:
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --html / --github still emit)
+  --copy                   Copy the pretty terminal report to the clipboard (skip silently if unavailable)
   --tokens                 Show token estimates (default: on)
   --no-tokens              Hide token estimates
   --format unified|split   Textual diff layout (default: unified)
@@ -64,6 +82,8 @@ score/level/identical/tokens_delta/findings are written when GITHUB_OUTPUT is se
 GITHUB_STEP_SUMMARY is set. --quiet hides the pretty report only.
 --html and --json cannot share stdout; pick one primary export.
 --theme only restyles --html (ember = 0.1.9 look). Pretty / JSON / GitHub / scoring unchanged.
+--copy writes the pretty terminal report (not JSON / HTML / GitHub chrome).
+No clipboard tool → skip silently (exit 0 unless something else fails).
 
 Suite mode (--suite <file.json|yml>): process multiple prompt pairs from a file.
 File format: array of {id?, old, new}. With --json, outputs aggregated report
@@ -93,6 +113,7 @@ interface CliValues {
   json: boolean;
   github: boolean;
   quiet: boolean;
+  copy: boolean;
   tokens: boolean;
   "no-tokens": boolean;
   format: string;
@@ -146,6 +167,7 @@ function parseCli(argv: string[]): { values: CliValues; positionals: string[] } 
         json: { type: "boolean", default: false },
         github: { type: "boolean", default: false },
         quiet: { type: "boolean", default: false },
+        copy: { type: "boolean", default: false },
         tokens: { type: "boolean", default: false },
         "no-tokens": { type: "boolean", default: false },
         format: { type: "string", default: "unified" },
@@ -204,7 +226,7 @@ async function writeHtmlFile(path: string, html: string, quiet: boolean): Promis
   }
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[], deps: CliDeps = {}): Promise<number> {
   const { values, positionals } = parseCli(argv);
 
   if (values.help) {
@@ -298,6 +320,22 @@ async function main(argv: string[]): Promise<number> {
     stdoutIsTTY: Boolean(process.stdout.isTTY),
   });
 
+  const prettyReport = formatHuman(result, oldText, newText, {
+    color: false,
+    tokens: showTokens,
+    format,
+    oldLabel: paths.old,
+    newLabel: paths.new,
+    columns: 80,
+    semanticRisk,
+    locale,
+  });
+
+  if (values.copy) {
+    const copy = deps.copyToClipboard ?? copyToClipboard;
+    maybeCopyPretty(prettyReport, copy);
+  }
+
   if (values.github) {
     const ann = formatGitHubAnnotations(result, {
       oldLabel: paths.old,
@@ -328,16 +366,7 @@ async function main(argv: string[]): Promise<number> {
   if (values.out) {
     const outputContent = values.json
       ? `${JSON.stringify(formatJson(result, paths, semanticRisk ?? null), null, 2)}\n`
-      : formatHuman(result, oldText, newText, {
-          color: false,
-          tokens: showTokens,
-          format,
-          oldLabel: paths.old,
-          newLabel: paths.new,
-          columns: 80,
-          semanticRisk,
-          locale,
-        });
+      : prettyReport;
     
     try {
       await writeFile(values.out, outputContent, "utf8");
@@ -439,6 +468,8 @@ async function runSuiteMode(values: CliValues, theme: HtmlTheme): Promise<number
 
   const report = await processSuite(pairs, { context });
 
+  // Suite is JSON-only — no pretty prompt-diff report to copy. --copy is a silent no-op.
+
   const output = JSON.stringify(report, null, 2);
   const html =
     values.html !== undefined
@@ -486,8 +517,21 @@ async function runSuiteMode(values: CliValues, theme: HtmlTheme): Promise<number
   return 0;
 }
 
-const exitCode = await main(process.argv.slice(2)).catch((err: unknown) => {
-  process.stderr.write(`prompt-diff: ${err instanceof Error ? err.stack ?? err.message : err}\n`);
-  return 2;
-});
-process.exit(exitCode);
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  const self = fileURLToPath(import.meta.url);
+  try {
+    return realpathSync(entry) === self || realpathSync(entry) === realpathSync(self);
+  } catch {
+    return /(cli\.(js|ts)|prompt-diff)$/.test(entry);
+  }
+}
+
+if (isDirectRun()) {
+  const exitCode = await main(process.argv.slice(2)).catch((err: unknown) => {
+    process.stderr.write(`prompt-diff: ${err instanceof Error ? err.stack ?? err.message : err}\n`);
+    return 2;
+  });
+  process.exit(exitCode);
+}

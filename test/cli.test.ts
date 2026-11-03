@@ -217,6 +217,21 @@ describe("prompt-diff CLI", () => {
     assert.match(result.stdout, /pretty terminal report|findings/);
   });
 
+  it("documents --copy in help", () => {
+    const result = run(["--help"]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /--copy/);
+    assert.match(result.stdout, /clipboard/);
+    assert.match(result.stdout, /skip silently/);
+  });
+
+  it("accepts --copy without failing when clipboard is unavailable", () => {
+    const result = run(["--copy", "--quiet", "prompts/v1.txt", "prompts/v2.txt"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.doesNotMatch(result.stderr, /clipboard/i);
+  });
+
   it("suppresses the pretty report with --quiet", () => {
     const result = run(["--quiet", "prompts/v1.txt", "prompts/v2.txt"]);
     assert.equal(result.status, 0, result.stderr);
@@ -265,7 +280,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.10");
+    assert.equal(pkg.version, "0.1.11");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
