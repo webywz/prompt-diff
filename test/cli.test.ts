@@ -280,7 +280,7 @@ describe("prompt-diff CLI", () => {
     assert.equal(pkg.engines?.node, ">=18.18.0");
     assert.equal((readme.match(/Node\.js 18\.18\+/g) ?? []).length >= 2, true);
     assert.equal(/Node\.js 18(?!\.18)\+/.test(readme), false);
-    assert.equal(pkg.version, "0.1.11");
+    assert.equal(pkg.version, "0.1.12");
     const example = readFileSync(join(root, "examples/github-actions.yml"), "utf8");
     assert.match(example, /@webywz\/prompt-diff@\^0\.1\.5/);
     assert.match(example, /--quiet/);
@@ -505,6 +505,7 @@ describe("prompt-diff CLI", () => {
       assert.match(result.stdout, /fog/);
       assert.match(result.stdout, /midnight/);
       assert.match(result.stdout, /paper/);
+      assert.match(result.stdout, /aurora/);
     });
 
     it("prints HTML to stdout when path is omitted", () => {
@@ -624,33 +625,40 @@ describe("prompt-diff CLI", () => {
       assert.doesNotMatch(ember.stdout, /--bar-track:/);
     });
 
-    it("applies fog / midnight / paper palettes on --html", () => {
+    it("applies fog / midnight / paper / aurora palettes on --html", () => {
       const fog = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "fog"]);
       const midnight = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "midnight"]);
       const paper = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "paper"]);
+      const aurora = run(["prompts/v1.txt", "prompts/v2.txt", "--html", "--theme", "aurora"]);
       assert.equal(fog.status, 0, fog.stderr);
       assert.equal(midnight.status, 0, midnight.stderr);
       assert.equal(paper.status, 0, paper.stderr);
+      assert.equal(aurora.status, 0, aurora.stderr);
       assert.match(fog.stdout, /--bg: #e8eef4/);
       assert.match(midnight.stdout, /--bg: #0b0d14/);
       assert.match(paper.stdout, /--bg: #f6f0e4/);
+      assert.match(aurora.stdout, /--bg: #0b2744/);
+      assert.match(aurora.stdout, /--cyan: #78c0ff/);
+      assert.match(aurora.stdout, /--ok-border: #1e4850/);
       assert.doesNotMatch(fog.stdout, /--bg: #1a1b26/);
       assert.doesNotMatch(midnight.stdout, /--bg: #1a1b26/);
+      assert.doesNotMatch(aurora.stdout, /--bg: #1a1b26/);
       assert.notEqual(fog.stdout, midnight.stdout);
       assert.notEqual(paper.stdout, fog.stdout);
+      assert.notEqual(aurora.stdout, midnight.stdout);
     });
 
     it("rejects an unknown --theme with UsageError", () => {
       const result = run(["--html", "--theme", "solarized", "prompts/v1.txt", "prompts/v2.txt"]);
       assert.equal(result.status, 2);
-      assert.match(result.stderr, /must be one of: ember, fog, midnight, paper/);
+      assert.match(result.stderr, /must be one of: ember, fog, midnight, paper, aurora/);
       assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
     });
 
     it("rejects a missing --theme value", () => {
       const result = run(["--html", "--theme"]);
       assert.equal(result.status, 2);
-      assert.match(result.stderr, /ember, fog, midnight, paper/);
+      assert.match(result.stderr, /ember, fog, midnight, paper, aurora/);
       assert.doesNotMatch(result.stdout, /<!DOCTYPE html>/i);
     });
 

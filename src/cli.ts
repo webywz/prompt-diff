@@ -52,7 +52,7 @@ Options:
   --suite <file>           Process multiple pairs from JSON/YAML file
   --out <file>             Write report to file
   --html [path]            Self-contained HTML report (stdout, or write to path; offline, no CDN)
-  --theme <name>           HTML palette: ember (default), fog, midnight, paper
+  --theme <name>           HTML palette: ember (default), fog, midnight, paper, aurora
   --json                   Machine-readable JSON
   --github                 Emit GitHub Actions annotations (::notice/warning/error)
   --quiet                  Suppress the pretty terminal report (--json / --html / --github still emit)

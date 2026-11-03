@@ -104,9 +104,32 @@ describe("escapeHtml / formatHtml", () => {
     assert.notEqual(htmlByTheme.fog, htmlByTheme.ember);
     assert.notEqual(htmlByTheme.midnight, htmlByTheme.ember);
     assert.notEqual(htmlByTheme.paper, htmlByTheme.ember);
+    assert.notEqual(htmlByTheme.aurora, htmlByTheme.ember);
     assert.match(htmlByTheme.fog, /var\(--hot-border\)/);
     assert.match(htmlByTheme.midnight, /var\(--bar-track\)/);
     assert.match(htmlByTheme.paper, /var\(--text-soft\)/);
+    assert.match(htmlByTheme.aurora, /var\(--hot-border\)/);
+    assert.match(htmlByTheme.aurora, /var\(--bar-track\)/);
+    assert.match(htmlByTheme.aurora, /--bg: #0b2744/);
+    assert.match(htmlByTheme.aurora, /--cyan: #78c0ff/);
+    assert.match(htmlByTheme.aurora, /--green: #3ee8c8/);
+    assert.match(htmlByTheme.aurora, /--yellow: #c498ff/);
+    assert.doesNotMatch(htmlByTheme.aurora, /--bg: #1a1b26/);
+  });
+
+  it("aurora shares breathing-github-profile / llm-roast polar-night tokens", () => {
+    const aurora = THEME_TOKENS.aurora;
+    assert.equal(aurora["--bg"], "#0b2744");
+    assert.equal(aurora["--bg-deep"], "#030d18");
+    assert.equal(aurora["--panel"], "#071a30");
+    assert.equal(aurora["--border"], "#2a3c4c");
+    assert.equal(aurora["--text"], "#e4fff6");
+    assert.equal(aurora["--muted"], "#8ad0c4");
+    assert.equal(aurora["--cyan"], "#78c0ff");
+    assert.equal(aurora["--green"], "#3ee8c8");
+    assert.equal(aurora["--yellow"], "#c498ff");
+    assert.equal(aurora["--ok-border"], "#1e4850");
+    assert.ok((HTML_THEMES as readonly string[]).includes("aurora"));
   });
 
   it("renders suite summary and per-pair cards", async () => {
